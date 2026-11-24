@@ -22,8 +22,10 @@ from app.reporting.service.channels.orass_sandbox import (
     SANDBOX_NOTE,
     OrassSandboxChannel,
 )
+from app.reporting.service.channels.reporting_gateway import ReportingGatewayChannel
 
 __all__ = [
+    "ReportingGatewayChannel",
     "ACT_930_PENALTY_REMINDER",
     "CONFIRMED_CONSULTATION_ADDRESS",
     "PROVISIONAL_CONTRACT_NOTE",

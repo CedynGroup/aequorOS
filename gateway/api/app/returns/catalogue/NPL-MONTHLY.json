@@ -1,0 +1,160 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "NPL-MONTHLY",
+ "name": "Monthly Non-Performing Loans Report (Notice 2025/23 Appendix II)",
+ "cadence": "monthly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank",
+  "rural_bank",
+  "savings_and_loans",
+  "microfinance"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "aeq-npl-monthly-v1",
+  "fidelity": "PARTIAL",
+  "workbook": null
+ },
+ "sections": [
+  {
+   "code": "npl_levels",
+   "title": "NPL Level and Flows",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Value",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "credit_migration",
+   "title": "Credit Migration Over the Month",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Exposure (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "loan_count",
+     "label": "Loans",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "write_offs",
+   "title": "Write-offs (Wilful / Non-wilful)",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Amount (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "recoveries",
+   "title": "Cash Recovery from NPLs",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Amount (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "restructuring",
+   "title": "Restructuring Activity",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Amount (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "loan_count",
+     "label": "Facilities",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "headline_comparative",
+   "title": "Headline Totals vs Previous Period",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Reporting Period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "key": "prior_value",
+     "label": "Previous Period",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "totals",
+   "title": "Headline totals",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Value",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "NPL-MONTHLY-STR-001",
+   "severity": "error",
+   "kind": "present",
+   "section": "npl_levels",
+   "description": "NPL Level and Flows is reported"
+  },
+  {
+   "id": "NPL-MONTHLY-STR-002",
+   "severity": "error",
+   "kind": "present",
+   "section": "headline_comparative",
+   "description": "Headline Totals vs Previous Period is reported"
+  }
+ ]
+}

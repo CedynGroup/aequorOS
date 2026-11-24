@@ -1,0 +1,598 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD10",
+ "name": "Capital Expenditure",
+ "cadence": "semiannual",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd10-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD10 REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_bsd10",
+   "title": "BSD10",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD10.land_buildings.R7.land_buildings",
+     "label": "A. Purchased",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.furniture_equipment.R7.furniture_equipment",
+     "label": "A. Purchased",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.computers.R7.computers",
+     "label": "A. Purchased",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.other_office_equipment.R7.other_office_equipment",
+     "label": "A. Purchased",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.motor_vehicles.R7.motor_vehicles",
+     "label": "A. Purchased",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10!H7",
+     "label": "A.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10.land_buildings.R8.land_buildings",
+     "label": "B. On finance-lease",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.furniture_equipment.R8.furniture_equipment",
+     "label": "B. On finance-lease",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.computers.R8.computers",
+     "label": "B. On finance-lease",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.other_office_equipment.R8.other_office_equipment",
+     "label": "B. On finance-lease",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.motor_vehicles.R8.motor_vehicles",
+     "label": "B. On finance-lease",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10!H8",
+     "label": "B.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10.land_buildings.R9.land_buildings",
+     "label": "C. On Hire-Purchase",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.furniture_equipment.R9.furniture_equipment",
+     "label": "C. On Hire-Purchase",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.computers.R9.computers",
+     "label": "C. On Hire-Purchase",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.other_office_equipment.R9.other_office_equipment",
+     "label": "C. On Hire-Purchase",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.motor_vehicles.R9.motor_vehicles",
+     "label": "C. On Hire-Purchase",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10!H9",
+     "label": "C.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10.land_buildings.R10.land_buildings",
+     "label": "D. Capital WIP",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.furniture_equipment.R10.furniture_equipment",
+     "label": "D. Capital WIP",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.computers.R10.computers",
+     "label": "D. Capital WIP",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.other_office_equipment.R10.other_office_equipment",
+     "label": "D. Capital WIP",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.motor_vehicles.R10.motor_vehicles",
+     "label": "D. Capital WIP",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10!H10",
+     "label": "D.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10.land_buildings.R11.land_buildings",
+     "label": "E. Contracted but not provided",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.furniture_equipment.R11.furniture_equipment",
+     "label": "E. Contracted but not provided",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.computers.R11.computers",
+     "label": "E. Contracted but not provided",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.other_office_equipment.R11.other_office_equipment",
+     "label": "E. Contracted but not provided",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.motor_vehicles.R11.motor_vehicles",
+     "label": "E. Contracted but not provided",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10!H11",
+     "label": "E.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10.land_buildings.R12.land_buildings",
+     "label": "F. Authorised but not contracted",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.furniture_equipment.R12.furniture_equipment",
+     "label": "F. Authorised but not contracted",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.computers.R12.computers",
+     "label": "F. Authorised but not contracted",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.other_office_equipment.R12.other_office_equipment",
+     "label": "F. Authorised but not contracted",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.motor_vehicles.R12.motor_vehicles",
+     "label": "F. Authorised but not contracted",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10!H12",
+     "label": "F.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10.land_buildings.R13.land_buildings",
+     "label": "G. Forecast to be acquired in next six months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.furniture_equipment.R13.furniture_equipment",
+     "label": "G. Forecast to be acquired in next six months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.computers.R13.computers",
+     "label": "G. Forecast to be acquired in next six months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.other_office_equipment.R13.other_office_equipment",
+     "label": "G. Forecast to be acquired in next six months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.motor_vehicles.R13.motor_vehicles",
+     "label": "G. Forecast to be acquired in next six months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10!H13",
+     "label": "G.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10.land_buildings.R14.land_buildings",
+     "label": "H. Disposal proceeds",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.furniture_equipment.R14.furniture_equipment",
+     "label": "H. Disposal proceeds",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.computers.R14.computers",
+     "label": "H. Disposal proceeds",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.other_office_equipment.R14.other_office_equipment",
+     "label": "H. Disposal proceeds",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.motor_vehicles.R14.motor_vehicles",
+     "label": "H. Disposal proceeds",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10!H14",
+     "label": "H.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10.land_buildings.R16.land_buildings",
+     "label": "Forecast to be acquired 0 - 3 months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.furniture_equipment.R16.furniture_equipment",
+     "label": "Forecast to be acquired 0 - 3 months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.computers.R16.computers",
+     "label": "Forecast to be acquired 0 - 3 months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.other_office_equipment.R16.other_office_equipment",
+     "label": "Forecast to be acquired 0 - 3 months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.motor_vehicles.R16.motor_vehicles",
+     "label": "Forecast to be acquired 0 - 3 months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10!H16",
+     "label": "Forecast to be acquired 0 - 3 months",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10.land_buildings.R17.land_buildings",
+     "label": "3 - 6 months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.furniture_equipment.R17.furniture_equipment",
+     "label": "3 - 6 months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.computers.R17.computers",
+     "label": "3 - 6 months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.other_office_equipment.R17.other_office_equipment",
+     "label": "3 - 6 months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10.motor_vehicles.R17.motor_vehicles",
+     "label": "3 - 6 months",
+     "kind": "number"
+    },
+    {
+     "code": "BSD10!H17",
+     "label": "3 - 6 months",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10!C18",
+     "label": "Total",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10!D18",
+     "label": "Total",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10!E18",
+     "label": "Total",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10!F18",
+     "label": "Total",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10!G18",
+     "label": "Total",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD10!H18",
+     "label": "Total",
+     "kind": "number",
+     "total": true
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "BSD10-ARI-0001",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!H7",
+   "terms": [
+    "BSD10.land_buildings.R7.land_buildings",
+    "BSD10.furniture_equipment.R7.furniture_equipment",
+    "BSD10.computers.R7.computers",
+    "BSD10.other_office_equipment.R7.other_office_equipment",
+    "BSD10.motor_vehicles.R7.motor_vehicles"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD10!H7 follows the template formula =SUM(C7:G7)"
+  },
+  {
+   "id": "BSD10-ARI-0002",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!H8",
+   "terms": [
+    "BSD10.land_buildings.R8.land_buildings",
+    "BSD10.furniture_equipment.R8.furniture_equipment",
+    "BSD10.computers.R8.computers",
+    "BSD10.other_office_equipment.R8.other_office_equipment",
+    "BSD10.motor_vehicles.R8.motor_vehicles"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD10!H8 follows the template formula =SUM(C8:G8)"
+  },
+  {
+   "id": "BSD10-ARI-0003",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!H9",
+   "terms": [
+    "BSD10.land_buildings.R9.land_buildings",
+    "BSD10.furniture_equipment.R9.furniture_equipment",
+    "BSD10.computers.R9.computers",
+    "BSD10.other_office_equipment.R9.other_office_equipment",
+    "BSD10.motor_vehicles.R9.motor_vehicles"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD10!H9 follows the template formula =SUM(C9:G9)"
+  },
+  {
+   "id": "BSD10-ARI-0004",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!H10",
+   "terms": [
+    "BSD10.land_buildings.R10.land_buildings",
+    "BSD10.furniture_equipment.R10.furniture_equipment",
+    "BSD10.computers.R10.computers",
+    "BSD10.other_office_equipment.R10.other_office_equipment",
+    "BSD10.motor_vehicles.R10.motor_vehicles"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD10!H10 follows the template formula =SUM(C10:G10)"
+  },
+  {
+   "id": "BSD10-ARI-0005",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!H11",
+   "terms": [
+    "BSD10.land_buildings.R11.land_buildings",
+    "BSD10.furniture_equipment.R11.furniture_equipment",
+    "BSD10.computers.R11.computers",
+    "BSD10.other_office_equipment.R11.other_office_equipment",
+    "BSD10.motor_vehicles.R11.motor_vehicles"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD10!H11 follows the template formula =SUM(C11:G11)"
+  },
+  {
+   "id": "BSD10-ARI-0006",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!H12",
+   "terms": [
+    "BSD10.land_buildings.R12.land_buildings",
+    "BSD10.furniture_equipment.R12.furniture_equipment",
+    "BSD10.computers.R12.computers",
+    "BSD10.other_office_equipment.R12.other_office_equipment",
+    "BSD10.motor_vehicles.R12.motor_vehicles"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD10!H12 follows the template formula =SUM(C12:G12)"
+  },
+  {
+   "id": "BSD10-ARI-0007",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!H13",
+   "terms": [
+    "BSD10.land_buildings.R13.land_buildings",
+    "BSD10.furniture_equipment.R13.furniture_equipment",
+    "BSD10.computers.R13.computers",
+    "BSD10.other_office_equipment.R13.other_office_equipment",
+    "BSD10.motor_vehicles.R13.motor_vehicles"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD10!H13 follows the template formula =SUM(C13:G13)"
+  },
+  {
+   "id": "BSD10-ARI-0008",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!H14",
+   "terms": [
+    "BSD10.land_buildings.R14.land_buildings",
+    "BSD10.furniture_equipment.R14.furniture_equipment",
+    "BSD10.computers.R14.computers",
+    "BSD10.other_office_equipment.R14.other_office_equipment",
+    "BSD10.motor_vehicles.R14.motor_vehicles"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD10!H14 follows the template formula =SUM(C14:G14)"
+  },
+  {
+   "id": "BSD10-ARI-0009",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!H16",
+   "terms": [
+    "BSD10.land_buildings.R16.land_buildings",
+    "BSD10.furniture_equipment.R16.furniture_equipment",
+    "BSD10.computers.R16.computers",
+    "BSD10.other_office_equipment.R16.other_office_equipment",
+    "BSD10.motor_vehicles.R16.motor_vehicles"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD10!H16 follows the template formula =SUM(C16:G16)"
+  },
+  {
+   "id": "BSD10-ARI-0010",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!H17",
+   "terms": [
+    "BSD10.land_buildings.R17.land_buildings",
+    "BSD10.furniture_equipment.R17.furniture_equipment",
+    "BSD10.computers.R17.computers",
+    "BSD10.other_office_equipment.R17.other_office_equipment",
+    "BSD10.motor_vehicles.R17.motor_vehicles"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD10!H17 follows the template formula =SUM(C17:G17)"
+  },
+  {
+   "id": "BSD10-ARI-0011",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!C18",
+   "terms": [
+    "BSD10.land_buildings.R16.land_buildings",
+    "BSD10.land_buildings.R17.land_buildings"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD10!C18 follows the template formula =C16+C17"
+  },
+  {
+   "id": "BSD10-ARI-0012",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!D18",
+   "terms": [
+    "BSD10.furniture_equipment.R16.furniture_equipment",
+    "BSD10.furniture_equipment.R17.furniture_equipment"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD10!D18 follows the template formula =D16+D17"
+  },
+  {
+   "id": "BSD10-ARI-0013",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!E18",
+   "terms": [
+    "BSD10.computers.R16.computers",
+    "BSD10.computers.R17.computers"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD10!E18 follows the template formula =E16+E17"
+  },
+  {
+   "id": "BSD10-ARI-0014",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!F18",
+   "terms": [
+    "BSD10.other_office_equipment.R16.other_office_equipment",
+    "BSD10.other_office_equipment.R17.other_office_equipment"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD10!F18 follows the template formula =F16+F17"
+  },
+  {
+   "id": "BSD10-ARI-0015",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!G18",
+   "terms": [
+    "BSD10.motor_vehicles.R16.motor_vehicles",
+    "BSD10.motor_vehicles.R17.motor_vehicles"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD10!G18 follows the template formula =G16+G17"
+  },
+  {
+   "id": "BSD10-ARI-0016",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD10!H18",
+   "terms": [
+    "BSD10!H16",
+    "BSD10!H17"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD10!H18 follows the template formula =H16+H17"
+  }
+ ]
+}

@@ -18,6 +18,9 @@ import type {
   ChannelConfigWriteAcknowledgement,
   EmailFallbackInstructionsRead,
   ErrorResponse,
+  FilingProfilePut,
+  FilingProfileRead,
+  FilingProfileWriteAcknowledgement,
   FilingSetPreviewRead,
   FilingWorkflowTemplateCreate,
   FilingWorkflowTemplateDecision,
@@ -26,6 +29,7 @@ import type {
   FilingWorkflowTemplateSubmit,
   FilingWorkflowTemplateUpdate,
   FilingWorkflowTemplateWriteAcknowledgement,
+  GatewayConnectionTest,
   PackageApprovalDecisionCreate,
   PackageApprovalRequestCreate,
   PackageAttachmentListRead,
@@ -38,6 +42,9 @@ import type {
   PackageStatusFilter,
   PackageSubmitCreate,
   PackageVersionChainRead,
+  RegulatorQueryListRead,
+  RegulatorQueryMessageRead,
+  RegulatorQueryResponseCreate,
   RegulatoryArtifactListRead,
   RegulatoryArtifactRead,
   RegulatoryArtifactVersionListRead,
@@ -45,6 +52,7 @@ import type {
   RegulatoryPackageListRead,
   RegulatoryPackageRead,
   ReportComparisonRead,
+  ReportingGatewayStatus,
   ReportingObligationListRead,
   ReportingSettingsPut,
   ReportingSettingsRead,
@@ -71,6 +79,12 @@ import {
   EmailFallbackInstructionsReadToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
+  FilingProfilePutFromJSON,
+  FilingProfilePutToJSON,
+  FilingProfileReadFromJSON,
+  FilingProfileReadToJSON,
+  FilingProfileWriteAcknowledgementFromJSON,
+  FilingProfileWriteAcknowledgementToJSON,
   FilingSetPreviewReadFromJSON,
   FilingSetPreviewReadToJSON,
   FilingWorkflowTemplateCreateFromJSON,
@@ -87,6 +101,8 @@ import {
   FilingWorkflowTemplateUpdateToJSON,
   FilingWorkflowTemplateWriteAcknowledgementFromJSON,
   FilingWorkflowTemplateWriteAcknowledgementToJSON,
+  GatewayConnectionTestFromJSON,
+  GatewayConnectionTestToJSON,
   PackageApprovalDecisionCreateFromJSON,
   PackageApprovalDecisionCreateToJSON,
   PackageApprovalRequestCreateFromJSON,
@@ -111,6 +127,12 @@ import {
   PackageSubmitCreateToJSON,
   PackageVersionChainReadFromJSON,
   PackageVersionChainReadToJSON,
+  RegulatorQueryListReadFromJSON,
+  RegulatorQueryListReadToJSON,
+  RegulatorQueryMessageReadFromJSON,
+  RegulatorQueryMessageReadToJSON,
+  RegulatorQueryResponseCreateFromJSON,
+  RegulatorQueryResponseCreateToJSON,
   RegulatoryArtifactListReadFromJSON,
   RegulatoryArtifactListReadToJSON,
   RegulatoryArtifactReadFromJSON,
@@ -125,6 +147,8 @@ import {
   RegulatoryPackageReadToJSON,
   ReportComparisonReadFromJSON,
   ReportComparisonReadToJSON,
+  ReportingGatewayStatusFromJSON,
+  ReportingGatewayStatusToJSON,
   ReportingObligationListReadFromJSON,
   ReportingObligationListReadToJSON,
   ReportingSettingsPutFromJSON,
@@ -150,6 +174,11 @@ import {
   SubmissionPollReadFromJSON,
   SubmissionPollReadToJSON,
 } from "../models/index";
+
+export interface AcknowledgeRegulatorQueryRequest {
+  bankId: string;
+  number: string;
+}
 
 export interface ComparePackageVersionsRequest {
   bankId: string;
@@ -233,6 +262,10 @@ export interface GetEmailFallbackInstructionsRequest {
   packageId: string;
 }
 
+export interface GetFilingProfileRequest {
+  bankId: string;
+}
+
 export interface GetPackageFilingChainRequest {
   bankId: string;
   packageId: string;
@@ -246,6 +279,10 @@ export interface GetPackageVersionChainRequest {
 export interface GetRegulatoryPackageRequest {
   bankId: string;
   packageId: string;
+}
+
+export interface GetReportingGatewayStatusRequest {
+  bankId: string;
 }
 
 export interface GetReportingSettingsRequest {
@@ -274,6 +311,10 @@ export interface ListPackageArtifactsRequest {
 export interface ListPackageAttachmentsRequest {
   bankId: string;
   packageId: string;
+}
+
+export interface ListRegulatorQueriesRequest {
+  bankId: string;
 }
 
 export interface ListRegulatoryPackagesRequest {
@@ -342,6 +383,11 @@ export interface PutChannelConfigRequest {
   channelConfigPut: ChannelConfigPut;
 }
 
+export interface PutFilingProfileRequest {
+  bankId: string;
+  filingProfilePut: FilingProfilePut;
+}
+
 export interface PutReportingSettingsRequest {
   bankId: string;
   reportingSettingsPut: ReportingSettingsPut;
@@ -359,10 +405,21 @@ export interface RequestPackageResubmissionRequest {
   resubmissionRequestCreate: ResubmissionRequestCreate;
 }
 
+export interface RespondToRegulatorQueryRequest {
+  bankId: string;
+  number: string;
+  regulatorQueryResponseCreate: RegulatorQueryResponseCreate;
+}
+
 export interface SendPackageForApprovalRequest {
   bankId: string;
   packageId: string;
   packageSendForApproval: PackageSendForApproval;
+}
+
+export interface StartRegulatorRequestedCorrectionRequest {
+  bankId: string;
+  number: string;
 }
 
 export interface SubmitFilingWorkflowTemplateRequest {
@@ -375,6 +432,10 @@ export interface SubmitRegulatoryPackageRequest {
   bankId: string;
   packageId: string;
   packageSubmitCreate: PackageSubmitCreate;
+}
+
+export interface TestReportingGatewayConnectionRequest {
+  bankId: string;
 }
 
 export interface UpdateFilingWorkflowTemplateRequest {
@@ -408,6 +469,72 @@ export interface WithdrawPackageAttachmentRequest {
  *
  */
 export class RegulatoryReportingApi extends runtime.BaseAPI {
+  /**
+   * Tell the regulator the query has reached the bank (shown to the supervisor).
+   * Acknowledge Regulator Query
+   */
+  async acknowledgeRegulatorQueryRaw(
+    requestParameters: AcknowledgeRegulatorQueryRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<void>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling acknowledgeRegulatorQuery().',
+      );
+    }
+
+    if (requestParameters["number"] == null) {
+      throw new runtime.RequiredError(
+        "number",
+        'Required parameter "number" was null or undefined when calling acknowledgeRegulatorQuery().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-reporting/regulator-queries/{number}/acknowledgement`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"number"}}`,
+            encodeURIComponent(String(requestParameters["number"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.VoidApiResponse(response);
+  }
+
+  /**
+   * Tell the regulator the query has reached the bank (shown to the supervisor).
+   * Acknowledge Regulator Query
+   */
+  async acknowledgeRegulatorQuery(
+    requestParameters: AcknowledgeRegulatorQueryRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<void> {
+    await this.acknowledgeRegulatorQueryRaw(requestParameters, initOverrides);
+  }
+
   /**
    * Line-item figures diff: the path package is the base, ``against`` the target.  Computed server-side against the two immutable snapshots, so it is available for every version — including one that was never exported — and so the comparison an examiner is shown is the one the platform computed.
    * Compare Package Versions
@@ -1516,6 +1643,66 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * How the bank files: the shared reporting basis and contact, the institution code from its institution profile, and the default channel for approved returns.
+   * Get Filing Profile
+   */
+  async getFilingProfileRaw(
+    requestParameters: GetFilingProfileRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FilingProfileRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getFilingProfile().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-reporting/filing-profile`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FilingProfileReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * How the bank files: the shared reporting basis and contact, the institution code from its institution profile, and the default channel for approved returns.
+   * Get Filing Profile
+   */
+  async getFilingProfile(
+    requestParameters: GetFilingProfileRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FilingProfileRead> {
+    const response = await this.getFilingProfileRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Where the return is, who holds it, every decision, and what THIS caller may do.
    * Get Package Filing Chain
    */
@@ -1723,6 +1910,66 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<RegulatoryPackageRead> {
     const response = await this.getRegulatoryPackageRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * The bank\'s AequorOS Reporting Gateway connection: enrolment steps, connection, signature key facts and recent transmissions. Enrolment is carried out by the channel operator; this never returns key material.
+   * Get Reporting Gateway Status
+   */
+  async getReportingGatewayStatusRaw(
+    requestParameters: GetReportingGatewayStatusRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ReportingGatewayStatus>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling getReportingGatewayStatus().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-reporting/reporting-gateway`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ReportingGatewayStatusFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * The bank\'s AequorOS Reporting Gateway connection: enrolment steps, connection, signature key facts and recent transmissions. Enrolment is carried out by the channel operator; this never returns key material.
+   * Get Reporting Gateway Status
+   */
+  async getReportingGatewayStatus(
+    requestParameters: GetReportingGatewayStatusRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ReportingGatewayStatus> {
+    const response = await this.getReportingGatewayStatusRaw(
       requestParameters,
       initOverrides,
     );
@@ -2131,6 +2378,66 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<PackageAttachmentListRead> {
     const response = await this.listPackageAttachmentsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * The regulator\'s queries on the bank\'s filings, read live from the gateway.  Every query and its whole thread, newest first, each linked to the bank\'s own return when the receipt is one this bank filed.
+   * List Regulator Queries
+   */
+  async listRegulatorQueriesRaw(
+    requestParameters: ListRegulatorQueriesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<RegulatorQueryListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listRegulatorQueries().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-reporting/regulator-queries`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      RegulatorQueryListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * The regulator\'s queries on the bank\'s filings, read live from the gateway.  Every query and its whole thread, newest first, each linked to the bank\'s own return when the receipt is one this bank filed.
+   * List Regulator Queries
+   */
+  async listRegulatorQueries(
+    requestParameters: ListRegulatorQueriesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<RegulatorQueryListRead> {
+    const response = await this.listRegulatorQueriesRaw(
       requestParameters,
       initOverrides,
     );
@@ -2900,6 +3207,76 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * Set the filing profile and default channel (exact reg/configure/restricted authority for this bank). A channel the bank is not connected to is refused.
+   * Put Filing Profile
+   */
+  async putFilingProfileRaw(
+    requestParameters: PutFilingProfileRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<FilingProfileWriteAcknowledgement>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling putFilingProfile().',
+      );
+    }
+
+    if (requestParameters["filingProfilePut"] == null) {
+      throw new runtime.RequiredError(
+        "filingProfilePut",
+        'Required parameter "filingProfilePut" was null or undefined when calling putFilingProfile().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-reporting/filing-profile`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "PUT",
+        headers: headerParameters,
+        query: queryParameters,
+        body: FilingProfilePutToJSON(requestParameters["filingProfilePut"]),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      FilingProfileWriteAcknowledgementFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Set the filing profile and default channel (exact reg/configure/restricted authority for this bank). A channel the bank is not connected to is refused.
+   * Put Filing Profile
+   */
+  async putFilingProfile(
+    requestParameters: PutFilingProfileRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<FilingProfileWriteAcknowledgement> {
+    const response = await this.putFilingProfileRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Set per-bank monthly-deadline overrides ({return_code: day_of_month}).  Service-enforced exact reg/configure/restricted authority for this bank (VAL-CFG-007); the response is a write-only acknowledgement.
    * Put Reporting Settings
    */
@@ -3138,6 +3515,90 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * Send the bank\'s reply to the regulator: the transmitting officer\'s act.
+   * Respond To Regulator Query
+   */
+  async respondToRegulatorQueryRaw(
+    requestParameters: RespondToRegulatorQueryRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<RegulatorQueryMessageRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling respondToRegulatorQuery().',
+      );
+    }
+
+    if (requestParameters["number"] == null) {
+      throw new runtime.RequiredError(
+        "number",
+        'Required parameter "number" was null or undefined when calling respondToRegulatorQuery().',
+      );
+    }
+
+    if (requestParameters["regulatorQueryResponseCreate"] == null) {
+      throw new runtime.RequiredError(
+        "regulatorQueryResponseCreate",
+        'Required parameter "regulatorQueryResponseCreate" was null or undefined when calling respondToRegulatorQuery().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-reporting/regulator-queries/{number}/responses`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"number"}}`,
+            encodeURIComponent(String(requestParameters["number"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: RegulatorQueryResponseCreateToJSON(
+          requestParameters["regulatorQueryResponseCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      RegulatorQueryMessageReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Send the bank\'s reply to the regulator: the transmitting officer\'s act.
+   * Respond To Regulator Query
+   */
+  async respondToRegulatorQuery(
+    requestParameters: RespondToRegulatorQueryRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<RegulatorQueryMessageRead> {
+    const response = await this.respondToRegulatorQueryRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * The Preparer\'s act: pin the chain and hand the return to the next stage.  ``checks_passed`` gates entry. Machine validation is not a stage and not a person, so there is nothing to press called \"Validate\" — the checks run with generation and the Preparer clears them.
    * Send Package For Approval
    */
@@ -3215,6 +3676,78 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<PackageChainRead> {
     const response = await this.sendPackageForApprovalRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Open the correction the regulator asked for; the return goes back to its preparer.  Transmitting the corrected version files an amendment, and AequorOS then answers the regulator\'s request with the new receipt.
+   * Start Regulator Requested Correction
+   */
+  async startRegulatorRequestedCorrectionRaw(
+    requestParameters: StartRegulatorRequestedCorrectionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ResubmissionRequestRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling startRegulatorRequestedCorrection().',
+      );
+    }
+
+    if (requestParameters["number"] == null) {
+      throw new runtime.RequiredError(
+        "number",
+        'Required parameter "number" was null or undefined when calling startRegulatorRequestedCorrection().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-reporting/regulator-queries/{number}/correction`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"number"}}`,
+            encodeURIComponent(String(requestParameters["number"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ResubmissionRequestReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Open the correction the regulator asked for; the return goes back to its preparer.  Transmitting the corrected version files an amendment, and AequorOS then answers the regulator\'s request with the new receipt.
+   * Start Regulator Requested Correction
+   */
+  async startRegulatorRequestedCorrection(
+    requestParameters: StartRegulatorRequestedCorrectionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ResubmissionRequestRead> {
+    const response = await this.startRegulatorRequestedCorrectionRaw(
       requestParameters,
       initOverrides,
     );
@@ -3381,6 +3914,66 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<RegulatoryPackageRead> {
     const response = await this.submitRegulatoryPackageRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Obtain a gateway token and its keys without filing anything.
+   * Test Reporting Gateway Connection
+   */
+  async testReportingGatewayConnectionRaw(
+    requestParameters: TestReportingGatewayConnectionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<GatewayConnectionTest>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling testReportingGatewayConnection().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/regulatory-reporting/reporting-gateway/connection-test`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      GatewayConnectionTestFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Obtain a gateway token and its keys without filing anything.
+   * Test Reporting Gateway Connection
+   */
+  async testReportingGatewayConnection(
+    requestParameters: TestReportingGatewayConnectionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<GatewayConnectionTest> {
+    const response = await this.testReportingGatewayConnectionRaw(
       requestParameters,
       initOverrides,
     );
@@ -3803,6 +4396,7 @@ export type ExportRegulatoryPackageKindEnum =
 export const GetChannelConfigChannelEnum = {
   OrassApi: "orass_api",
   OrassSandbox: "orass_sandbox",
+  ReportingGateway: "reporting_gateway",
   Email: "email",
   Manual: "manual",
 } as const;
@@ -3814,6 +4408,7 @@ export type GetChannelConfigChannelEnum =
 export const PutChannelConfigChannelEnum = {
   OrassApi: "orass_api",
   OrassSandbox: "orass_sandbox",
+  ReportingGateway: "reporting_gateway",
   Email: "email",
   Manual: "manual",
 } as const;

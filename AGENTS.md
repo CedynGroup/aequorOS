@@ -176,7 +176,9 @@ new topic, add a row here.
 | Database institution ownership and deliberate reference exclusions | [backend/docs/database_integrity.md](backend/docs/database_integrity.md)                                                                 |
 | Database role matrix and droplet deployment runbook                | [docs/ops/database-roles.md](docs/ops/database-roles.md)                                                                                 |
 | Audit chains, filed-input seals and compliance retention           | [backend/docs/tamper_evident_records.md](backend/docs/tamper_evident_records.md)                                                         |
+| Notification platform: catalogue, branded email, delivery, filing alerts, regulator sync | [backend/docs/notifications.md](backend/docs/notifications.md#standing-rules-at-a-glance) |
 | Coolify deployment rules                                           | [deploy/README.md](deploy/README.md#coolify-compose-rules)                                                                               |
+| Reporting Gateway deployment: mTLS at the proxy, operator issue, key backups | [gateway/deploy/README.md](gateway/deploy/README.md)                                                                    |
 | Host change to `bank.aequoros.com`                                 | [backend/dashboard/README.md](backend/dashboard/README.md#deploy-to-bankaequoroscom)                                                     |
 | Flaky tests: rerun reporting, `flaky-test` policy, quarantine      | [CODEBASE_CONVENTIONS.md §6](CODEBASE_CONVENTIONS.md#6-flaky-tests-and-quarantine)                                                       |
 

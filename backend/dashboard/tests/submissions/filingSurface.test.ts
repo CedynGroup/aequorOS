@@ -123,6 +123,7 @@ function input(
     isRehearsal: false,
     pendingReupload: false,
     canPoll: true,
+    correctionGranted: false,
     regulatorName: "BoG",
     ...overrides,
   };
@@ -284,6 +285,41 @@ test("a Validator waiting on an earlier stage is told who holds it", () => {
   assert.ok(waiting);
   assert.equal(waiting!.enabled, false);
   assert.match(waiting!.reason ?? "", /waiting on the approver/i);
+});
+
+test("a granted correction puts a filed return back in the preparer's hands", () => {
+  for (const status of ["submitted", "acknowledged"] as const) {
+    const action = primaryFilingAction(
+      input(PREPARER, status, { correctionGranted: true }),
+    );
+    assert.ok(action, status);
+    assert.equal(action!.kind, "regenerate");
+    assert.equal(action!.label, "Generate the corrected version");
+    assert.equal(action!.enabled, true);
+  }
+  // An officer holding both stages is offered the correction, not the status check.
+  const both = authority({
+    mayPrepare: true,
+    mayRunChecks: true,
+    mayTransmit: true,
+  });
+  assert.equal(
+    primaryFilingAction(input(both, "submitted", { correctionGranted: true }))!
+      .kind,
+    "regenerate",
+  );
+  // Without a grant, a filed return offers the preparer nothing to regenerate.
+  assert.notEqual(
+    primaryFilingAction(input(both, "submitted"))!.kind,
+    "regenerate",
+  );
+  // Nobody else is handed the preparer's act.
+  assert.equal(
+    primaryFilingAction(
+      input(VALIDATOR, "submitted", { correctionGranted: true }),
+    )!.kind,
+    "poll",
+  );
 });
 
 test("the preparer gets the rework when the regulator returns a filing", () => {

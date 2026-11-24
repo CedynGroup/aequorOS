@@ -723,6 +723,16 @@ class CanonicalPositionSnapshot(CanonicalMetadataMixin, Base):
     __tablename__ = "canonical_position_snapshots"
     __table_args__ = (
         Index("ix_canonical_position_snapshots_lineage_id", "lineage_id"),
+        # The rows one governed withdrawal retired. Every run read and every filing act
+        # measures them (``withdrawal_impact._first_ingested_at``); without this they
+        # were found by scanning the bank's whole position history. Partial: only
+        # withdrawn rows are indexed.
+        Index(
+            "ix_canonical_position_snapshots_withdrawal_batch",
+            "organization_id",
+            "withdrawn_by_batch_id",
+            postgresql_where=sql_text("withdrawn_by_batch_id IS NOT NULL"),
+        ),
         CheckConstraint(
             f"rate_type IN ({_values(RATE_TYPES)}) OR rate_type IS NULL",
             name="ck_canonical_position_snapshots_rate_type",

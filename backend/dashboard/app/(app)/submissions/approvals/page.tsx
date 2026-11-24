@@ -27,7 +27,10 @@ import {
   UserCheck,
   XCircle,
 } from "lucide-react";
-import type { RegulatoryPackageSummaryRead } from "@aequoros/risk-service-api";
+import type {
+  RegulatorQueryRead,
+  RegulatoryPackageSummaryRead,
+} from "@aequoros/risk-service-api";
 import PageHeader from "@/components/ui/PageHeader";
 import DataTable, { type Column } from "@/components/ui/DataTable";
 import SectionCard from "@/components/ui/SectionCard";
@@ -46,6 +49,7 @@ import {
   useEmailFallbackInstructions,
   useHandOffPackageFilingStage,
   usePollRegulatorySubmission,
+  useRegulatorQueries,
   useSubmissionEvents,
   usePackageFilingSet,
   useRegulatoryPackage,
@@ -74,7 +78,9 @@ const FILING_DECISION_LABELS: Record<string, string> = {
   returned: "Sent back",
 };
 import TransmitConfirmDialog from "@/components/submissions/TransmitConfirmDialog";
-import FiledRecord from "@/components/submissions/FiledRecord";
+import FiledRecord, {
+  type RegulatorCorrectionRequest,
+} from "@/components/submissions/FiledRecord";
 import DowntimeFallback from "@/components/submissions/DowntimeFallback";
 import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWarning";
 
@@ -153,6 +159,19 @@ export default function ApprovalsPage() {
   const selected =
     queue.find((pkg) => pkg.id === selectedId) ?? queue[0] ?? null;
 
+  /** Only a return still in the chain waits on an officer; a filed one is counted apart. */
+  function queueSubtitle(rows: readonly RegulatoryPackageSummaryRead[]): string {
+    const filed = rows.filter(
+      (pkg) => pkg.status === "submitted" || pkg.status === "acknowledged",
+    ).length;
+    const waiting = rows.length - filed;
+    const parts = [
+      `${waiting} package${waiting === 1 ? "" : "s"} waiting on an officer's decision`,
+    ];
+    if (filed > 0) parts.push(`${filed} filed with ${regShort()}`);
+    return parts.join(" · ");
+  }
+
   const columns: Column<RegulatoryPackageSummaryRead>[] = [
     {
       key: "return",
@@ -217,8 +236,16 @@ export default function ApprovalsPage() {
       // Approver stage AND a Validator stage, so a queue labelled from the
       // status alone said "Pending approval" about a return that was with the
       // Validator. The title is the bank's own word for the stage.
+      //
+      // A filed return waits on no officer. The chain keeps pointing at the
+      // stage that transmitted it, so labelling a filed row from the stage said
+      // "Validator" about a return the regulator had already accepted.
       render: (pkg) =>
-        pkg.currentStageTitle ? (
+        pkg.status === "acknowledged" ? (
+          <StatusPill tone="success">Accepted by {regShort()}</StatusPill>
+        ) : pkg.status === "submitted" ? (
+          <StatusPill tone="pending">With {regShort()}</StatusPill>
+        ) : pkg.currentStageTitle ? (
           <StatusPill tone="pending">{pkg.currentStageTitle}</StatusPill>
         ) : (
           <span className="text-caption text-slate">Not yet in review</span>
@@ -254,7 +281,7 @@ export default function ApprovalsPage() {
         >
           <SectionCard
             title="In review"
-            subtitle={`${queue.length} package${queue.length === 1 ? "" : "s"} waiting on an officer's decision`}
+            subtitle={queueSubtitle(queue)}
             noPadding
           >
             {queue.length === 0 ? (
@@ -283,6 +310,26 @@ export default function ApprovalsPage() {
       </PageContainer>
     </>
   );
+}
+
+/** Open requests from the regulator for a corrected filing of ``receipt``. */
+function correctionRequestsFor(
+  queries: readonly RegulatorQueryRead[],
+  receipt: string | null,
+): RegulatorCorrectionRequest[] {
+  if (!receipt) return [];
+  return queries
+    .filter(
+      (query) =>
+        query.kind === "resubmission" &&
+        query.status !== "closed" &&
+        query.receiptId === receipt,
+    )
+    .map((query) => ({
+      number: query.number,
+      dueAt: query.dueAt ? new Date(query.dueAt) : null,
+      body: query.messages.find((message) => message.author === "supervisor")?.body ?? "",
+    }));
 }
 
 function DecidePanel({
@@ -336,6 +383,11 @@ function DecidePanel({
   // rather than watching the row vanish.
   const eventsQuery = useSubmissionEvents(bankId, pkg.id);
   const poll = usePollRegulatorySubmission(bankId);
+  // The regulator's open requests for a corrected filing reach the filed record
+  // here, where the transmitting officer works, not only on the queries tab.
+  const regulatorQueries = useRegulatorQueries(bankId, {
+    enabled: pkg.status === "submitted" || pkg.status === "acknowledged",
+  });
   const filedEvents = eventsQuery.data?.events ?? [];
   const isFiled = filedEvents.some((event) => event.event === "submitted");
   // The portal refused the transmission. `channel_downtime` is the structured
@@ -601,7 +653,16 @@ function DecidePanel({
             checkError={poll.error}
             lastCheckedLabel={poll.data ? fmtTimestamp(new Date()) : null}
             onDownloadReceipt={null}
-            onRequestResubmission={null}
+            correctionHref={
+              filingAuthority.mayTransmit
+                ? `/submissions/returns?code=${encodeURIComponent(pkg.returnCode)}&date=${isoDate(pkg.reportingDate)}&corrections=1`
+                : null
+            }
+            regulatorRequests={correctionRequestsFor(
+              regulatorQueries.data?.items ?? [],
+              [...filedEvents].reverse().find((event) => event.event === "submitted")
+                ?.externalRef ?? null,
+            )}
           />
         ) : stageNotMine ? (
           <div
@@ -1032,6 +1093,9 @@ function DecidePanel({
               satisfied: filingSetQuery.data.satisfied,
               omissions: filingSetQuery.data.omissions,
               contentDigest: filingSetQuery.data.contentDigest ?? null,
+              channel: filingSetQuery.data.channel,
+              gatewayFigureCount:
+                filingSetQuery.data.gatewayFigureCount ?? null,
             }}
             regulatorName={centralBankName()}
             pending={handOff.isPending}

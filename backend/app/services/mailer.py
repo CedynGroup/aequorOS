@@ -120,26 +120,39 @@ def subject_line(title: str) -> str:
     return f"{SUBJECT_PREFIX} {title}"
 
 
-def compose(
+def compose(  # noqa: PLR0913 - one message is exactly these named parts
     *,
     subject: str,
     body: str,
     recipients: Sequence[str],
     sender_address: str,
     attachments: Sequence[Attachment] = (),
+    html: str | None = None,
+    message_id: str | None = None,
 ) -> EmailMessage:
-    """A plain-text message, with attachments when the caller supplies them.
+    """A plain-text message, optionally with an HTML alternative and attachments.
 
-    Plain text and nothing else: an HTML body would be a second rendering of
-    figures that already have a governed renderer, and a remote image in a mail
-    client is a read receipt nobody consented to.
+    The plain text is always present and complete. ``html`` is only ever the
+    notification platform's branded rendering of the SAME structured message
+    (``app/notifications/rendering.py``): it carries no figures that lack a
+    governed renderer and loads nothing remote, because a remote image in a
+    mail client is a read receipt nobody consented to.
+
+    Every message is marked ``Auto-Submitted: auto-generated`` so out-of-office
+    replies and mail loops stay out of the unmonitored sender mailbox.
     """
 
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = sender_address
     message["To"] = ", ".join(recipients)
+    message["Auto-Submitted"] = "auto-generated"
+    message["X-Auto-Response-Suppress"] = "All"
+    if message_id is not None:
+        message["Message-ID"] = message_id
     message.set_content(body)
+    if html is not None:
+        message.add_alternative(html, subtype="html")
     for attachment in attachments:
         message.add_attachment(
             attachment.content,

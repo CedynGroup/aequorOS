@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Audit log and integrity</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#F4F6F8}
+a{color:#1F4FD1}a:hover{color:#163A9C}
+</style>
+</helmet>
+<div style="box-sizing: border-box; min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6F8; color: #0E1726; font-family: Inter, system-ui, sans-serif">
+<div style="flex: 1 1 248px; max-width: 100%; background: #0F1E36; display: flex">
+<dc-import name="Sidebar" active="audit" hint-size="100%,1000px"></dc-import>
+</div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; padding: 28px 32px 48px">
+<header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #4B5565">Assurance / Audit log</span>
+<h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.01em">Audit log</h1>
+<span style="font-size: 14px; color: #4B5565">Every sign-in, view, decision and configuration change, in a hash chain anyone can verify</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<button type="button" style="height: 44px; padding: 0 16px; border: 1px solid #C9D1DB; border-radius: 8px; background: #FFFFFF; color: #0E1726; font: inherit; font-size: 14px; font-weight: 500">Verify chain now</button>
+<button type="button" style="height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: #1F4FD1; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600">Export for auditors</button>
+</div>
+</header>
+
+<section aria-label="Integrity" style="display: flex; flex-wrap: wrap; gap: 14px">
+<div style="flex: 2 1 420px; display: flex; gap: 14px; align-items: center; background: #EAF5EF; border: 1px solid #BFE3CF; border-radius: 10px; padding: 16px 18px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 40px; height: 40px; border-radius: 999px; background: #0F6B3E; display: flex; align-items: center; justify-content: center"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4L19 6"></path></svg></span>
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<span style="font-size: 15px; font-weight: 600; color: #0B4F2E">Chain intact · 1,148,412 entries</span>
+<span style="font-size: 13px; color: #1E5A3C">Verified automatically at 16:30 · head <span style="font-family: 'IBM Plex Mono', monospace">7c1e9a04…b3f2</span> · checked every 30 minutes</span>
+</div>
+</div>
+<div style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 4px; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 16px 18px">
+<span style="font-size: 13px; color: #4B5565">Copy to the Bank’s SIEM</span>
+<span style="font-size: 15px; font-weight: 600">Streaming · 3 s behind</span>
+<span style="font-size: 12px; color: #4B5565">The Bank keeps its own copy, outside our control</span>
+</div>
+<div style="flex: 1 1 220px; display: flex; flex-direction: column; gap: 4px; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 16px 18px">
+<span style="font-size: 13px; color: #4B5565">Retention</span>
+<span style="font-size: 15px; font-weight: 600; color: #6B4E16">[Retention period set by BoG]</span>
+<span style="font-size: 12px; color: #4B5565">Entries cannot be edited or deleted</span>
+</div>
+</section>
+
+<form aria-label="Filters" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 16px 18px">
+<sc-for list="{{filters}}" as="filter" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 6px; flex: 1 1 180px">
+<label for="{{filter.id}}" style="font-size: 12px; font-weight: 600; color: #344054">{{filter.label}}</label>
+<select id="{{filter.id}}" style="box-sizing: border-box; height: 44px; border: 1px solid #C9D1DB; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 14px; background: #FFFFFF; color: #0E1726">
+<sc-for list="{{filter.options}}" as="option" hint-placeholder-count="3"><option>{{option}}</option></sc-for>
+</select>
+</div>
+</sc-for>
+</form>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<section aria-label="Entries" style="flex: 3 1 640px; min-width: 0; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; overflow-x: auto">
+<table style="width: 100%; min-width: 820px; border-collapse: collapse; font-size: 14px">
+<thead>
+<tr style="text-align: left; color: #4B5565; font-size: 12px">
+<th scope="col" style="font-weight: 600; padding: 12px 12px 10px 18px; border-bottom: 1px solid #DDE2E8">Time (GMT)</th>
+<th scope="col" style="font-weight: 600; padding: 12px 12px 10px; border-bottom: 1px solid #DDE2E8">Actor</th>
+<th scope="col" style="font-weight: 600; padding: 12px 12px 10px; border-bottom: 1px solid #DDE2E8">Action</th>
+<th scope="col" style="font-weight: 600; padding: 12px 12px 10px; border-bottom: 1px solid #DDE2E8">Object</th>
+<th scope="col" style="font-weight: 600; padding: 12px 18px 10px 12px; border-bottom: 1px solid #DDE2E8">Entry</th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{entries}}" as="entry" hint-placeholder-count="12">
+<tr style="{{entry.rowStyle}}">
+<td style="padding: 11px 12px 11px 18px; border-bottom: 1px solid #EEF0F3; color: #344054; font-variant-numeric: tabular-nums; white-space: nowrap">{{entry.time}}</td>
+<td style="padding: 11px 12px; border-bottom: 1px solid #EEF0F3">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-weight: 500">{{entry.actor}}</span>
+<span style="font-size: 12px; color: #4B5565">{{entry.via}}</span>
+</div>
+</td>
+<td style="padding: 11px 12px; border-bottom: 1px solid #EEF0F3"><span style="{{entry.chip}}">{{entry.category}}</span> <span style="margin-left: 6px">{{entry.action}}</span></td>
+<td style="padding: 11px 12px; border-bottom: 1px solid #EEF0F3; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #344054">{{entry.object}}</td>
+<td style="padding: 11px 18px 11px 12px; border-bottom: 1px solid #EEF0F3; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #4B5565; white-space: nowrap">{{entry.number}}</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</section>
+
+<aside aria-labelledby="entry-title" style="flex: 2 1 340px; min-width: 0; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 13px; color: #4B5565">Selected entry</span>
+<h2 id="entry-title" style="margin: 0; font-size: 18px; font-weight: 600">Support session started</h2>
+<span style="font-size: 13px; color: #4B5565">Entry 1,148,371 · 21 Nov 2026, 14:58:40 GMT</span>
+</div>
+<dl style="margin: 0; display: flex; flex-direction: column; gap: 12px">
+<sc-for list="{{detail}}" as="fact" hint-placeholder-count="7">
+<div style="display: flex; flex-direction: column; gap: 3px">
+<dt style="font-size: 12px; color: #4B5565">{{fact.label}}</dt>
+<dd style="{{fact.style}}">{{fact.value}}</dd>
+</div>
+</sc-for>
+</dl>
+<a href="Access.dc.html" style="font-size: 13px; font-weight: 500">Open the approval record</a>
+</aside>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1140}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const filters = [
+      { id: 'a-actor', label: 'Actor', options: ['Everyone', 'Bank staff', 'Institutions', 'System', 'Operator support'] },
+      { id: 'a-category', label: 'Category', options: ['All categories', 'Sign-in', 'Filing', 'Decision', 'View', 'Configuration', 'Operator access'] },
+      { id: 'a-institution', label: 'Institution', options: ['All institutions', 'Palmgrove Bank', 'Meridian Coast Bank'] },
+      { id: 'a-date', label: 'Date', options: ['Today', 'Last 7 days', 'This cycle', 'Custom range'] }
+    ];
+    const chipBase = 'display: inline-flex; font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px; white-space: nowrap; ';
+    const chips = {
+      Filing: 'background: #E6EEFC; color: #1F4FD1',
+      Decision: 'background: #E3F4EC; color: #0F6B3E',
+      View: 'background: #EEF0F3; color: #344054',
+      'Sign-in': 'background: #EEF0F3; color: #344054',
+      Operator: 'background: #FDEFD9; color: #8A4B00',
+      System: 'background: #F4F6F8; color: #4B5565',
+      Query: 'background: #EFEAFE; color: #5B35C2'
+    };
+    const entries = [
+      ['16:38:04', 'Meridian Coast Bank', 'API client mcb-prod-01', 'Filing', 'Filed BSD2 v1', 'SRG-26-0114822', '1,148,412'],
+      ['16:21:40', 'K. Owusu', 'Portal · BoG SSO', 'Decision', 'Accepted filing', 'SRG-26-0114819', '1,148,409'],
+      ['16:10:22', 'A. Boateng', 'Portal · BoG SSO', 'View', 'Opened submission', 'SRG-26-0114806', '1,148,401'],
+      ['16:02:00', 'System', 'Assignment rule', 'System', 'Assigned reviewer', 'SRG-26-0114806', '1,148,395'],
+      ['15:57:12', 'Palmgrove Bank', 'API client pgb-prod-01', 'Filing', 'Filed amendment v2', 'SRG-26-0114806', '1,148,388'],
+      ['14:58:40', 'J. Tetteh, operator', 'Support · approved session', 'Operator', 'Support session started', 'SUP-2026-0042', '1,148,371'],
+      ['14:12:09', 'System', 'Validation service', 'System', 'Rejected filing, 3 rules', 'SRG-26-0114771', '1,148,352'],
+      ['13:40:51', 'Lakeside Trust Bank', 'Portal upload · 2 users', 'Filing', 'Filed BSD6 v1', 'SRG-26-0114760', '1,148,340'],
+      ['11:30:02', 'K. Owusu', 'Portal · BoG SSO', 'Query', 'Opened query', 'QRY-2026-0318', '1,148,297'],
+      ['09:02:17', 'K. Owusu', 'Portal · BoG SSO · MFA', 'Sign-in', 'Signed in', 'session 4f1a…', '1,148,201']
+    ].map(([time, actor, via, category, action, object, number]) => ({
+      time, actor, via, category, action, object, number,
+      chip: chipBase + chips[category],
+      rowStyle: number === '1,148,371' ? 'background: #F2F6FE' : 'background: #FFFFFF'
+    }));
+    const mono = 'margin: 0; font-family: \'IBM Plex Mono\', monospace; font-size: 13px; color: #0E1726; word-break: break-all; line-height: 1.5';
+    const plain = 'margin: 0; font-size: 14px; color: #0E1726; font-weight: 500; line-height: 1.45';
+    const detail = [
+      { label: 'Operator', value: 'J. Tetteh, AequorOS support', style: plain },
+      { label: 'Approved by', value: 'M. Adjei, Bank of Ghana · 14:55', style: plain },
+      { label: 'Scope and limit', value: 'Read-only diagnostics, 60 minutes, no filing content', style: plain },
+      { label: 'Reason given', value: 'Slow receipts reported by two institutions', style: plain },
+      { label: 'Previous entry hash', value: '3b07c2e1 9d4a5f60 7e18c3b2 a6d90f45', style: mono },
+      { label: 'This entry hash', value: 'e52f8a13 c7b04d96 21fa3e7c 58d1b0a2', style: mono },
+      { label: 'Signed by', value: 'Audit key 2026-Q4 · valid', style: plain }
+    ];
+    return { filters, entries, detail };
+  }
+}
+</script>
+</body>
+</html>

@@ -12,6 +12,9 @@ permanent guard on both directions.
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRoute
@@ -31,6 +34,11 @@ from app.core.logging import configure_logging
 from app.core.request_id import RequestIdMiddleware
 from app.core.tls import RequireTLSMiddleware, database_connect_args, validate_service_transports
 from app.operator.api.bank_encryption import router as bank_encryption_router
+from app.operator.api.reporting_gateway import router as reporting_gateway_router
+from app.operator.api.reporting_gateway_institutions import (
+    router as reporting_gateway_institutions_router,
+)
+from app.operator.deps import get_operator_sessionmaker
 from app.operator.features.activity import router as activity_router
 from app.operator.features.audit_log import router as audit_log_router
 from app.operator.features.auth import router as auth_router
@@ -50,6 +58,7 @@ from app.operator.features.provision import router as provision_router
 from app.operator.features.regulatory_parameters import router as regulatory_parameters_router
 from app.operator.features.tenants import router as tenants_router
 from app.operator.features.worker_health import router as worker_health_router
+from app.operator.services.gateway_renewal_scheduler import start_scheduled_check
 from app.schemas.health import HealthResponse
 
 OPERATOR_APP_NAME = "aequoros-operator"
@@ -83,10 +92,24 @@ def create_operator_app() -> FastAPI:
     validate_service_transports(settings)
     configure_logging(settings.logging.log_level)
 
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+        # Gateway client certificates are renewed from here: this plane alone
+        # holds the gateway operator credential (gateway_renewal_scheduler).
+        scheduler = start_scheduled_check(
+            operator_settings, settings.app.app_env, get_operator_sessionmaker
+        )
+        try:
+            yield
+        finally:
+            if scheduler is not None:
+                scheduler.stop()
+
     app = FastAPI(
         title=OPERATOR_APP_NAME,
         responses=OPENAPI_ERROR_RESPONSES,
         generate_unique_id_function=generate_operation_id,
+        lifespan=lifespan,
     )
     # Same middleware order as the tenant app (see app.main for the reasoning:
     # unhandled exceptions become 500s inside the request-id and CORS layers).
@@ -122,6 +145,8 @@ def create_operator_app() -> FastAPI:
     operator_router.include_router(tenants_router)
     operator_router.include_router(provision_router)
     operator_router.include_router(bank_encryption_router)
+    operator_router.include_router(reporting_gateway_router)
+    operator_router.include_router(reporting_gateway_institutions_router)
     operator_router.include_router(activity_router)
     operator_router.include_router(audit_log_router)
     operator_router.include_router(inspector_router)

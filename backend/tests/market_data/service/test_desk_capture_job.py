@@ -20,7 +20,9 @@ def test_every_job_type_has_a_worker_handler() -> None:
     assert set(worker.HANDLERS) == set(job_queue.JOB_TYPES)
 
 
-def test_notification_email_mirror_is_no_longer_orphaned() -> None:
-    """Pin the specific fix: the tick enqueues this type, so the worker must
-    claim it."""
-    assert "notification_email_mirror" in worker.HANDLERS
+def test_notification_dispatch_is_claimable() -> None:
+    """Pin the specific fix, carried over when the SMTP mirror became the
+    notification dispatcher: publishing enqueues this type, so the worker must
+    claim it — and the retired mirror type must be gone from both tables."""
+    assert "notification_dispatch" in worker.HANDLERS
+    assert "notification_email_mirror" not in job_queue.JOB_TYPES

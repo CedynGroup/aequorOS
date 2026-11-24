@@ -48,6 +48,7 @@ import { TenantFindingsSection } from "@/components/tenants/TenantFindingsSectio
 import { TenantIngestionSection } from "@/components/tenants/TenantIngestionSection";
 import { TenantConfigSection } from "@/components/tenants/TenantConfigSection";
 import { RemediationPanel } from "@/components/tenants/RemediationPanel";
+import { ReportingGatewaySection } from "@/components/tenants/ReportingGatewaySection";
 import { formatBytes } from "@/components/tenants/util";
 import type {
   DeskEntitlement,
@@ -482,6 +483,7 @@ export default function TenantDetailPage() {
                 }
               />
             </div>
+
           </>
         )}
       </QueryBoundary>
@@ -489,6 +491,20 @@ export default function TenantDetailPage() {
       {/* ------------------------------------------------- deep data (gated) */}
       {sessionActive ? (
         <>
+          {/* ------------------------------- reporting gateway enrolment */}
+          {/* Enrolment writes into this tenant's configuration (its gateway
+              client and signature key), so like the encryption key it lives
+              behind the inspection session. */}
+          {t?.bank_id && (
+            <div className="mb-5">
+              <ReportingGatewaySection
+                orgId={orgId}
+                bankId={t.bank_id}
+                bankName={t.bank_name ?? t.organization_name}
+              />
+            </div>
+          )}
+
           {/* ------------------------------------------------ activity */}
           <SectionCard
             title="Activity"

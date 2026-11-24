@@ -1,0 +1,1574 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD15B",
+ "name": "Charges — Foreign (International Banking Charges)",
+ "cadence": "weekly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd15b-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD15B REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_international_banking_charges",
+   "title": "International Banking Charges",
+   "unit": "text",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD15B.R10.charge",
+     "label": "Establishment Commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R11.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R12.charge",
+     "label": "<3months",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R13.charge",
+     "label": "3-6months",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R14.charge",
+     "label": "6-9months",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R15.charge",
+     "label": "Over 9 months",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R16.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R18.charge",
+     "label": "60 days",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R19.charge",
+     "label": "Arrangement fee",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R20.charge",
+     "label": "90 days",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R21.charge",
+     "label": "Arrangement fee",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R22.charge",
+     "label": "120 days",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R23.charge",
+     "label": "150 days",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R24.charge",
+     "label": "180 days",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R25.charge",
+     "label": "Arrangement fee",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R26.charge",
+     "label": "Presentation under L/C Drawings",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R27.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R29.charge",
+     "label": "Increase in Amount",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R30.charge",
+     "label": "Extention of period",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R31.charge",
+     "label": "Extention of period- another quarter",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R32.charge",
+     "label": "Discrepancy",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R35.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R36.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R37.charge",
+     "label": "Revolving credits",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R38.charge",
+     "label": "Cable/Telex/Swift charges",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R39.charge",
+     "label": "Swap charge",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R40.charge",
+     "label": "Confirmation commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R41.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R42.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R43.charge",
+     "label": "Payment commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R44.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R45.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R47.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R48.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R49.charge",
+     "label": "Exchange - (Drawing/Negitiation)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R50.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R51.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R52.charge",
+     "label": "Cancellation fee",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R53.charge",
+     "label": "Correspondent Bank charges - Upfront Payment",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R55.charge",
+     "label": "FULLY COVERED L/CS (IMPORTS)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R57.charge",
+     "label": "Establishment",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R58.charge",
+     "label": "Revolving/Standby L/C",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R59.charge",
+     "label": "Drawings/Negotiation commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R60.charge",
+     "label": "Exchange - Drawings/Negotiation",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R61.charge",
+     "label": "Amendments",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R62.charge",
+     "label": "Increase in L/C value",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R63.charge",
+     "label": "Other Amendments",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R64.charge",
+     "label": "Extension",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R68.charge",
+     "label": "Advising commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R69.charge",
+     "label": "Customers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R70.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R71.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R72.charge",
+     "label": "Non-customers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R73.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R74.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R75.charge",
+     "label": "Handling Charges",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R76.charge",
+     "label": "Customers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R77.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R78.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R79.charge",
+     "label": "Non-customers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R80.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R81.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R82.charge",
+     "label": "Confirmation Commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R83.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R84.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R85.charge",
+     "label": "Amendment commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R86.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R87.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R88.charge",
+     "label": "Transfer charge",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R89.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R90.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R91.charge",
+     "label": "Negotiation Commission - Corporate",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R92.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R93.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R94.charge",
+     "label": "Negotiation Commission - Others",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R95.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R96.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R97.charge",
+     "label": "Exchange Commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R98.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R99.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R100.charge",
+     "label": "Cancellation",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R101.charge",
+     "label": "Postage/Courier",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R105.charge",
+     "label": "Handling",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R106.charge",
+     "label": "Transfer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R107.charge",
+     "label": "Management Fees",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R111.charge",
+     "label": "Handling charges - customers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R112.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R113.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R114.charge",
+     "label": "Non customers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R115.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R116.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R117.charge",
+     "label": "Negotiation Commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R118.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R119.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R120.charge",
+     "label": "Advice of fate",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R121.charge",
+     "label": "Bills deleted",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R122.charge",
+     "label": "Protest",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R123.charge",
+     "label": "Payment Commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R124.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R125.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R126.charge",
+     "label": "Holding charges (per quarter)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R128.charge",
+     "label": "Own resources - FCA",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R129.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R130.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R131.charge",
+     "label": "Own resources - FEA",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R132.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R133.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R134.charge",
+     "label": "Telex/Cable charges",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R135.charge",
+     "label": "Swap charge",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R137.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R138.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R139.charge",
+     "label": "Exchange",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R140.charge",
+     "label": "Telex/Cable charges",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R143.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R144.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R146.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R147.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R150.charge",
+     "label": "Handling Commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R151.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R152.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R153.charge",
+     "label": "Foreign bills negotiated",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R154.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R155.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R156.charge",
+     "label": "Foreign bills discounted",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R157.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R158.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R159.charge",
+     "label": "Payment Commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R160.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R161.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R162.charge",
+     "label": "Protest Bills",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R163.charge",
+     "label": "Overdue bills/qtr",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R164.charge",
+     "label": "Reminder on overdue bills",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R165.charge",
+     "label": "Courier",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R166.charge",
+     "label": "Advise of Fate",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R167.charge",
+     "label": "Bills Deleted",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R170.charge",
+     "label": "Commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R171.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R172.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R174.charge",
+     "label": "Inwards",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R175.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R176.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R177.charge",
+     "label": "Outward",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R178.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R179.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R180.charge",
+     "label": "Clearing of Foreign checques",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R183.charge",
+     "label": "Arrangement fee",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R184.charge",
+     "label": "Processing fee",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R185.charge",
+     "label": "Facility Fee",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R189.charge",
+     "label": "Handling Commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R190.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R191.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R192.charge",
+     "label": "Commission- Guaratees (foreign)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R193.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R194.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R195.charge",
+     "label": "Commission-B/L indemnities",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R196.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R197.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R198.charge",
+     "label": "Default or restructured",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R201.charge",
+     "label": "Form A2",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R202.charge",
+     "label": "Import Declaration Form (IDF)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R206.charge",
+     "label": "Inward Remittances",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R208.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R209.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R210.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R211.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R212.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R213.charge",
+     "label": "Administrative charges",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R214.charge",
+     "label": "Transfer to beneficiary in other banks",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R215.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R216.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R217.charge",
+     "label": "Request for drafts against transfer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R218.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R219.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R220.charge",
+     "label": "Payment in Foreign Currency - Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R221.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R222.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R223.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R224.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R225.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R226.charge",
+     "label": "Telegraphic",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R227.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R228.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R229.charge",
+     "label": "Mail",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R230.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R231.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R232.charge",
+     "label": "Swap charges",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R233.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R234.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R235.charge",
+     "label": "Claiming of charges from Remitting Banks",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R239.charge",
+     "label": "Foreign currency account (FCA)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R240.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R241.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R242.charge",
+     "label": "Foreign Exchange account (FEA)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R243.charge",
+     "label": "Commission - Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R244.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R245.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R246.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R247.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R248.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R250.charge",
+     "label": "FCA",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R251.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R252.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R253.charge",
+     "label": "FEA - Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R254.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R255.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R256.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R257.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R258.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R260.charge",
+     "label": "Cedis against drafts - Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R261.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R262.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R263.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R264.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R265.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R269.charge",
+     "label": "Telegraphic- Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R270.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R271.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R272.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R273.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R274.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R275.charge",
+     "label": "Swift - Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R276.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R277.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R278.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R279.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R280.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R282.charge",
+     "label": "Drafts/Money Orders - Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R283.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R284.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R285.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R286.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R287.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R289.charge",
+     "label": "Customers own resources",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R290.charge",
+     "label": "FCA",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R291.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R292.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R293.charge",
+     "label": "FEA - Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R294.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R295.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R296.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R297.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R298.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R300.charge",
+     "label": "Bank's Funds - Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R301.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R302.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R303.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R304.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R305.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R307.charge",
+     "label": "Exchange - Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R308.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R309.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R310.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R311.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R312.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R314.charge",
+     "label": "Travellers Cheques, Drafts, I.M.O etc credited to Forex Acc.",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R316.charge",
+     "label": "Telex/Swift charges",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R319.charge",
+     "label": "FEA - Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R320.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R321.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R322.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R323.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R324.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R325.charge",
+     "label": "FCA - Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R326.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R327.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R328.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R329.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R330.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R333.charge",
+     "label": "For Foreign currency - Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R334.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R335.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R336.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R337.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R338.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R341.charge",
+     "label": "Local cheque",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R342.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R343.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R344.charge",
+     "label": "Foreign Cheque for collection",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R345.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R346.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R347.charge",
+     "label": "- Non customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R348.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R349.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R351.charge",
+     "label": "Stop cheques",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R353.charge",
+     "label": "Cheque issuance",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R355.charge",
+     "label": "Sale of Cheque Leaflet",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R357.charge",
+     "label": "Standing orders",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R358.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R359.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R361.charge",
+     "label": "Evacuation fee",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R363.charge",
+     "label": "17. ACCOUNT CLOSURE",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R366.charge",
+     "label": "Returned by bank",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R367.charge",
+     "label": "Returned by foreign bank",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R370.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R371.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R373.charge",
+     "label": "Service charge/Fees - Corporate",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R374.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R375.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R377.charge",
+     "label": "Service charge/Fees - Others",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R378.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R379.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R381.charge",
+     "label": "Cash Withdrawal FCA",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R382.charge",
+     "label": "Cash Withdrawal FEA",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R385.charge",
+     "label": "Charges on dormant accounts",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R388.charge",
+     "label": "Monthly",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R389.charge",
+     "label": "Duplicate- per sheet",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R390.charge",
+     "label": "Cheque Books",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R391.charge",
+     "label": "Personal",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15B.R392.charge",
+     "label": "Corporate",
+     "kind": "text"
+    }
+   ]
+  }
+ ],
+ "rules": []
+}

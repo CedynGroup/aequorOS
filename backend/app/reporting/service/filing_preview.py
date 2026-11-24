@@ -148,7 +148,7 @@ def build_preview(
     for kind in wanted:
         if kind in {entry.kind for entry in entries}:
             continue
-        if not workflow.filing_admits_artifact(kind, generator=generator):
+        if not workflow.package_files_artifact(package, kind, generator=generator):
             continue
         recalculable = kind in workflow.WORKING_ARTIFACT_KINDS
         if recalculable and not workflow._produces_working_copy(definition):  # noqa: SLF001
@@ -163,6 +163,18 @@ def build_preview(
                 signature_count=None,
             )
         )
+
+    # Through the AequorOS Reporting Gateway the formula workbook IS the Excel the
+    # regulator receives (``gateway_documents.filed_documents``), so the values-only
+    # copy is not in the set beside it unless the officers signed it.
+    if (
+        definition is not None
+        and workflow.filing_channel(db, ctx, bank.id, definition) == "reporting_gateway"
+        and any(entry.kind == "xlsx_working" for entry in entries)
+    ):
+        entries = [
+            entry for entry in entries if entry.kind != "xlsx" or (entry.signature_count or 0) > 0
+        ]
 
     # The revision the submission would stamp. The stored value is null until a
     # package has actually been filed, so a confirmation that read the column
@@ -223,8 +235,8 @@ def _omissions(
     admitted = WORKING_ARTIFACT_FILING_GENERATORS.get("xlsx_working", frozenset())
     if generator is not None and generator not in admitted:
         notes.append(
-            "No formula copy: the workbook with live formulas is filed only "
-            "with the official form templates, and this return is not one."
+            "No formula workbook: AequorOS builds no Excel with live formulas for "
+            "this return, so the values-only Excel is filed."
         )
     return notes
 

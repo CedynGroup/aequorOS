@@ -5,7 +5,8 @@ import { PermissionLink } from "@/components/ui/DisabledWithReason";
 import { hrefAccess } from "@/lib/modules";
 import { useModuleScope } from "./BankContext";
 
-export type Tab = { href: string; label: string };
+/** `prefix` keeps a tab current on its nested pages (e.g. a settings menu). */
+export type Tab = { href: string; label: string; match?: "exact" | "prefix" };
 
 export default function ModuleTabs({ tabs }: { tabs: Tab[] }) {
   const pathname = usePathname();
@@ -23,7 +24,10 @@ export default function ModuleTabs({ tabs }: { tabs: Tab[] }) {
         aria-label="Module sections"
       >
         {visibleTabs.map((t) => {
-          const isActive = pathname === t.href.split("?")[0];
+          const base = t.href.split("?")[0];
+          const isActive =
+            pathname === base ||
+            (t.match === "prefix" && pathname.startsWith(`${base}/`));
           const reason =
             t.access.state === "disabled" ? t.access.reason : undefined;
           return (

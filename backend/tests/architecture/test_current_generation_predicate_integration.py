@@ -30,8 +30,14 @@ def _partial_predicates() -> list[tuple[str, str, str]]:
         for index in table.indexes:
             for dialect in ("sqlite", "postgresql"):
                 predicate = cast(ClauseElement | None, index.dialect_options[dialect].get("where"))
-                if predicate is not None:
-                    predicates.append((str(index.name), dialect, str(predicate.compile())))
+                if predicate is None:
+                    continue
+                text = str(predicate.compile())
+                # Only current-generation predicates: an index over retired rows
+                # (``withdrawn_by_batch_id IS NOT NULL``) selects history, not the
+                # current row, and has no replacement to allow.
+                if "superseded_by" in text or "withdrawn_at" in text:
+                    predicates.append((str(index.name), dialect, text))
     assert predicates
     return sorted(predicates)
 

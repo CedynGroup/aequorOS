@@ -4,3 +4,7 @@ bf091b7b3c72edcee189fc5de3e43f691eb8d5f6:backend/app/case/service/documents.py:g
 6a6b38095f67c2ade9ae5f1233f04185bc92b4d7:backend/app/case/service/documents.py:generic-api-key:204
 68004d39682eb7f4c94a013d5d12be92cb47cb77:backend/app/case/service/documents.py:generic-api-key:224
 7d0d417f528e87add53418a4b692de83b0328427:backend/app/case/service/documents.py:generic-api-key:217
+# The gateway enrolment service's check of the CSR key's curve, not a credential.
+# The variable is renamed since, and this pull-request commit is squashed before it
+# reaches main.
+1d482b38261be5463a24022cf378ae2bf121af1d:gateway/api/app/enrolment/service.py:generic-api-key:339

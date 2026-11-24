@@ -363,6 +363,12 @@ CENSUS: dict[tuple[str, str], CensusEntry] = {
         "benign",
         "The caller's own notifications, scoped to the persisted locator.",
     ),
+    ("GET", "/api/v1/notifications/preferences"): CensusEntry(
+        "benign",
+        "The caller's own email choices over the notification catalogue"
+        " (views.my_preferences): event labels, the organisation's mode per"
+        " event and summary hour; no notice content, financial or bank data.",
+    ),
     ("GET", "/api/v1/banks"): CensusEntry(
         "benign",
         "The caller's own organization's bank directory (membership navigation).",
@@ -383,6 +389,21 @@ CENSUS: dict[tuple[str, str], CensusEntry] = {
         "scoped_in_service",
         "app.reporting.service.reporting_settings.get_reporting_settings"
         " (require_resolved_bank_permission)",
+    ),
+    ("GET", "/api/v1/banks/{bank_id}/regulatory-reporting/filing-profile"): CensusEntry(
+        "scoped_in_service",
+        "app.reporting.service.reporting_settings.get_filing_profile"
+        " (require_resolved_bank_permission)",
+    ),
+    ("GET", "/api/v1/banks/{bank_id}/regulatory-reporting/reporting-gateway"): CensusEntry(
+        "scoped_in_service",
+        "app.reporting.service.reporting_gateway_connection.gateway_status"
+        " (require_resolved_bank_permission)",
+    ),
+    ("GET", "/api/v1/banks/{bank_id}/regulatory-reporting/regulator-queries"): CensusEntry(
+        "scoped_in_service",
+        "app.reporting.service.gateway_queries.list_queries"
+        " (require_resolved_bank_permission, VIEW on Regulatory Reporting / restricted)",
     ),
     ("GET", "/api/v1/attestation/signature-placements"): CensusEntry(
         "scoped_in_service",

@@ -1,0 +1,6619 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD8",
+ "name": "Advances Subject to Adverse Classification",
+ "cadence": "monthly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd8-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD8 REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_bsd8",
+   "title": "BSD8",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD8.No.R7.no",
+     "label": "Previous balance (Gross)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.R7.current",
+     "label": "Previous balance (Gross) — current",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R7.olem",
+     "label": "Previous balance (Gross) — olem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R7.substandard",
+     "label": "Previous balance (Gross) — substandard",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R7.doubtful",
+     "label": "Previous balance (Gross) — doubtful",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R7.loss",
+     "label": "Previous balance (Gross) — loss",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8!H7",
+     "label": "Previous balance (Gross)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.No.R8.no",
+     "label": "Add: New advances made during the month",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.R8.current",
+     "label": "Add: New advances made during the month — current",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R8.olem",
+     "label": "Add: New advances made during the month — olem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R8.substandard",
+     "label": "Add: New advances made during the month — substandard",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R8.doubtful",
+     "label": "Add: New advances made during the month — doubtful",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R8.loss",
+     "label": "Add: New advances made during the month — loss",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8!H8",
+     "label": "Add: New advances made during the month",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.No.R9.no",
+     "label": "Add: Interest charged (for the month)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.R9.current",
+     "label": "Add: Interest charged (for the month) — current",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R9.olem",
+     "label": "Add: Interest charged (for the month) — olem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R9.substandard",
+     "label": "Add: Interest charged (for the month) — substandard",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R9.doubtful",
+     "label": "Add: Interest charged (for the month) — doubtful",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R9.loss",
+     "label": "Add: Interest charged (for the month) — loss",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8!H9",
+     "label": "Add: Interest charged (for the month)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.No.R10.no",
+     "label": "Add: Revaluation gains/loss (for the month)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.R10.current",
+     "label": "Add: Revaluation gains/loss (for the month) — current",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R10.olem",
+     "label": "Add: Revaluation gains/loss (for the month) — olem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R10.substandard",
+     "label": "Add: Revaluation gains/loss (for the month) — substandard",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R10.doubtful",
+     "label": "Add: Revaluation gains/loss (for the month) — doubtful",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R10.loss",
+     "label": "Add: Revaluation gains/loss (for the month) — loss",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8!H10",
+     "label": "Add: Revaluation gains/loss (for the month)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.No.R11.no",
+     "label": "Less: Amount recovered",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.R11.current",
+     "label": "Less: Amount recovered — current",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R11.olem",
+     "label": "Less: Amount recovered — olem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R11.substandard",
+     "label": "Less: Amount recovered — substandard",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R11.doubtful",
+     "label": "Less: Amount recovered — doubtful",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R11.loss",
+     "label": "Less: Amount recovered — loss",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8!H11",
+     "label": "Less: Amount recovered",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.No.R12.no",
+     "label": "Less: Amount written off",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.R12.current",
+     "label": "Less: Amount written off — current",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R12.olem",
+     "label": "Less: Amount written off — olem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R12.substandard",
+     "label": "Less: Amount written off — substandard",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R12.doubtful",
+     "label": "Less: Amount written off — doubtful",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R12.loss",
+     "label": "Less: Amount written off — loss",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8!H12",
+     "label": "Less: Amount written off",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.No.R13.no",
+     "label": "(+ / -) Changes in classification from previous month",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.R13.current",
+     "label": "(+ / -) Changes in classification from previous month — current",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R13.olem",
+     "label": "(+ / -) Changes in classification from previous month — olem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R13.substandard",
+     "label": "(+ / -) Changes in classification from previous month — substandard",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R13.doubtful",
+     "label": "(+ / -) Changes in classification from previous month — doubtful",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R13.loss",
+     "label": "(+ / -) Changes in classification from previous month — loss",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8!H13",
+     "label": "(+ / -) Changes in classification from previous month",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.No.R14.no",
+     "label": "Current balance (Gross)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8!C14",
+     "label": "Current balance (Gross)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8!D14",
+     "label": "Current balance (Gross)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8!E14",
+     "label": "Current balance (Gross)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8!F14",
+     "label": "Current balance (Gross)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8!G14",
+     "label": "Current balance (Gross)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8!H14",
+     "label": "Current balance (Gross)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.R15.current",
+     "label": "8 (b) Of which foreign Currency (of item 8) — current",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R15.olem",
+     "label": "8 (b) Of which foreign Currency (of item 8) — olem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R15.substandard",
+     "label": "8 (b) Of which foreign Currency (of item 8) — substandard",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R15.doubtful",
+     "label": "8 (b) Of which foreign Currency (of item 8) — doubtful",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R15.loss",
+     "label": "8 (b) Of which foreign Currency (of item 8) — loss",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8!H15",
+     "label": "8 (b)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.No.R16.no",
+     "label": "Revaluation gains (on NPL, cum. balance)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.R16.current",
+     "label": "Revaluation gains (on NPL, cum. balance) — current",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R16.olem",
+     "label": "Revaluation gains (on NPL, cum. balance) — olem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R16.substandard",
+     "label": "Revaluation gains (on NPL, cum. balance) — substandard",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R16.doubtful",
+     "label": "Revaluation gains (on NPL, cum. balance) — doubtful",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R16.loss",
+     "label": "Revaluation gains (on NPL, cum. balance) — loss",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8!H16",
+     "label": "Revaluation gains (on NPL, cum. balance)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.No.R17.no",
+     "label": "Interest in suspense (cumulative balance)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.R17.current",
+     "label": "Interest in suspense (cumulative balance) — current",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R17.olem",
+     "label": "Interest in suspense (cumulative balance) — olem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R17.substandard",
+     "label": "Interest in suspense (cumulative balance) — substandard",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R17.doubtful",
+     "label": "Interest in suspense (cumulative balance) — doubtful",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R17.loss",
+     "label": "Interest in suspense (cumulative balance) — loss",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8!H17",
+     "label": "Interest in suspense (cumulative balance)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.No.R18.no",
+     "label": "Allowable Security (Cash & Near Cash Instruments)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.R18.current",
+     "label": "Allowable Security (Cash & Near Cash Instruments) — current",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R18.olem",
+     "label": "Allowable Security (Cash & Near Cash Instruments) — olem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R18.substandard",
+     "label": "Allowable Security (Cash & Near Cash Instruments) — substandard",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R18.doubtful",
+     "label": "Allowable Security (Cash & Near Cash Instruments) — doubtful",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R18.loss",
+     "label": "Allowable Security (Cash & Near Cash Instruments) — loss",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8!H18",
+     "label": "Allowable Security (Cash & Near Cash Instruments)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.No.R19.no",
+     "label": "Net current balance (8-9-10-11)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8!C19",
+     "label": "Net current balance (8-9-10-11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8!D19",
+     "label": "Net current balance (8-9-10-11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8!E19",
+     "label": "Net current balance (8-9-10-11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8!F19",
+     "label": "Net current balance (8-9-10-11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8!G19",
+     "label": "Net current balance (8-9-10-11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8!H19",
+     "label": "Net current balance (8-9-10-11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.R20.current",
+     "label": "12 (b) Of which foreign Currency (of item 12) — current",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R20.olem",
+     "label": "12 (b) Of which foreign Currency (of item 12) — olem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R20.substandard",
+     "label": "12 (b) Of which foreign Currency (of item 12) — substandard",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R20.doubtful",
+     "label": "12 (b) Of which foreign Currency (of item 12) — doubtful",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R20.loss",
+     "label": "12 (b) Of which foreign Currency (of item 12) — loss",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8!H20",
+     "label": "12 (b)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.No.R21.no",
+     "label": "Provisions required (on 12)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.R21.current",
+     "label": "Provisions required (on 12) — current",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R21.olem",
+     "label": "Provisions required (on 12) — olem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R21.substandard",
+     "label": "Provisions required (on 12) — substandard",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R21.doubtful",
+     "label": "Provisions required (on 12) — doubtful",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.R21.loss",
+     "label": "Provisions required (on 12) — loss",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8!H21",
+     "label": "Provisions required (on 12)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.No.R22.no",
+     "label": "Amounts provided in BSD 2",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "sheet_bsd8_annexure",
+   "title": "BSD8-Annexure",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD8.Annexure.No.R5.no",
+     "label": "row 5",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R5.name",
+     "label": "Detail row 1 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R5.branch",
+     "label": "Detail row 1 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R5.sector",
+     "label": "Detail row 1 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R5.facility",
+     "label": "Detail row 1 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R5.expiry_date",
+     "label": "Detail row 1 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R5.capital",
+     "label": "Detail row 1 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R5.interest",
+     "label": "Detail row 1 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I5",
+     "label": "Cell I5",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R5.obs",
+     "label": "Detail row 1 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K5",
+     "label": "Cell K5",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R5.security_value",
+     "label": "Detail row 1 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R5.security_type",
+     "label": "Detail row 1 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R5.classification",
+     "label": "Detail row 1 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R5.provision",
+     "label": "Detail row 1 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R5.comments",
+     "label": "Detail row 1 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R6.no",
+     "label": "row 6",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R6.name",
+     "label": "Detail row 2 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R6.branch",
+     "label": "Detail row 2 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R6.sector",
+     "label": "Detail row 2 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R6.facility",
+     "label": "Detail row 2 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R6.expiry_date",
+     "label": "Detail row 2 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R6.capital",
+     "label": "Detail row 2 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R6.interest",
+     "label": "Detail row 2 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I6",
+     "label": "Cell I6",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R6.obs",
+     "label": "Detail row 2 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K6",
+     "label": "Cell K6",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R6.security_value",
+     "label": "Detail row 2 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R6.security_type",
+     "label": "Detail row 2 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R6.classification",
+     "label": "Detail row 2 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R6.provision",
+     "label": "Detail row 2 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R6.comments",
+     "label": "Detail row 2 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R7.no",
+     "label": "row 7",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R7.name",
+     "label": "Detail row 3 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R7.branch",
+     "label": "Detail row 3 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R7.sector",
+     "label": "Detail row 3 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R7.facility",
+     "label": "Detail row 3 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R7.expiry_date",
+     "label": "Detail row 3 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R7.capital",
+     "label": "Detail row 3 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R7.interest",
+     "label": "Detail row 3 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I7",
+     "label": "Cell I7",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R7.obs",
+     "label": "Detail row 3 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K7",
+     "label": "Cell K7",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R7.security_value",
+     "label": "Detail row 3 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R7.security_type",
+     "label": "Detail row 3 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R7.classification",
+     "label": "Detail row 3 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R7.provision",
+     "label": "Detail row 3 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R7.comments",
+     "label": "Detail row 3 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R8.no",
+     "label": "row 8",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R8.name",
+     "label": "Detail row 4 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R8.branch",
+     "label": "Detail row 4 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R8.sector",
+     "label": "Detail row 4 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R8.facility",
+     "label": "Detail row 4 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R8.expiry_date",
+     "label": "Detail row 4 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R8.capital",
+     "label": "Detail row 4 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R8.interest",
+     "label": "Detail row 4 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I8",
+     "label": "Cell I8",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R8.obs",
+     "label": "Detail row 4 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K8",
+     "label": "Cell K8",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R8.security_value",
+     "label": "Detail row 4 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R8.security_type",
+     "label": "Detail row 4 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R8.classification",
+     "label": "Detail row 4 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R8.provision",
+     "label": "Detail row 4 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R8.comments",
+     "label": "Detail row 4 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R9.no",
+     "label": "row 9",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R9.name",
+     "label": "Detail row 5 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R9.branch",
+     "label": "Detail row 5 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R9.sector",
+     "label": "Detail row 5 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R9.facility",
+     "label": "Detail row 5 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R9.expiry_date",
+     "label": "Detail row 5 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R9.capital",
+     "label": "Detail row 5 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R9.interest",
+     "label": "Detail row 5 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I9",
+     "label": "Cell I9",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R9.obs",
+     "label": "Detail row 5 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K9",
+     "label": "Cell K9",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R9.security_value",
+     "label": "Detail row 5 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R9.security_type",
+     "label": "Detail row 5 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R9.classification",
+     "label": "Detail row 5 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R9.provision",
+     "label": "Detail row 5 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R9.comments",
+     "label": "Detail row 5 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R10.no",
+     "label": "row 10",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R10.name",
+     "label": "Detail row 6 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R10.branch",
+     "label": "Detail row 6 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R10.sector",
+     "label": "Detail row 6 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R10.facility",
+     "label": "Detail row 6 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R10.expiry_date",
+     "label": "Detail row 6 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R10.capital",
+     "label": "Detail row 6 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R10.interest",
+     "label": "Detail row 6 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I10",
+     "label": "Cell I10",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R10.obs",
+     "label": "Detail row 6 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K10",
+     "label": "Cell K10",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R10.security_value",
+     "label": "Detail row 6 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R10.security_type",
+     "label": "Detail row 6 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R10.classification",
+     "label": "Detail row 6 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R10.provision",
+     "label": "Detail row 6 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R10.comments",
+     "label": "Detail row 6 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R11.no",
+     "label": "row 11",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R11.name",
+     "label": "Detail row 7 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R11.branch",
+     "label": "Detail row 7 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R11.sector",
+     "label": "Detail row 7 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R11.facility",
+     "label": "Detail row 7 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R11.expiry_date",
+     "label": "Detail row 7 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R11.capital",
+     "label": "Detail row 7 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R11.interest",
+     "label": "Detail row 7 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I11",
+     "label": "Cell I11",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R11.obs",
+     "label": "Detail row 7 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K11",
+     "label": "Cell K11",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R11.security_value",
+     "label": "Detail row 7 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R11.security_type",
+     "label": "Detail row 7 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R11.classification",
+     "label": "Detail row 7 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R11.provision",
+     "label": "Detail row 7 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R11.comments",
+     "label": "Detail row 7 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R12.no",
+     "label": "row 12",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R12.name",
+     "label": "Detail row 8 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R12.branch",
+     "label": "Detail row 8 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R12.sector",
+     "label": "Detail row 8 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R12.facility",
+     "label": "Detail row 8 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R12.expiry_date",
+     "label": "Detail row 8 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R12.capital",
+     "label": "Detail row 8 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R12.interest",
+     "label": "Detail row 8 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I12",
+     "label": "Cell I12",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R12.obs",
+     "label": "Detail row 8 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K12",
+     "label": "Cell K12",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R12.security_value",
+     "label": "Detail row 8 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R12.security_type",
+     "label": "Detail row 8 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R12.classification",
+     "label": "Detail row 8 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R12.provision",
+     "label": "Detail row 8 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R12.comments",
+     "label": "Detail row 8 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R13.no",
+     "label": "row 13",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R13.name",
+     "label": "Detail row 9 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R13.branch",
+     "label": "Detail row 9 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R13.sector",
+     "label": "Detail row 9 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R13.facility",
+     "label": "Detail row 9 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R13.expiry_date",
+     "label": "Detail row 9 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R13.capital",
+     "label": "Detail row 9 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R13.interest",
+     "label": "Detail row 9 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I13",
+     "label": "Cell I13",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R13.obs",
+     "label": "Detail row 9 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K13",
+     "label": "Cell K13",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R13.security_value",
+     "label": "Detail row 9 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R13.security_type",
+     "label": "Detail row 9 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R13.classification",
+     "label": "Detail row 9 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R13.provision",
+     "label": "Detail row 9 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R13.comments",
+     "label": "Detail row 9 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R14.no",
+     "label": "row 14",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R14.name",
+     "label": "Detail row 10 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R14.branch",
+     "label": "Detail row 10 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R14.sector",
+     "label": "Detail row 10 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R14.facility",
+     "label": "Detail row 10 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R14.expiry_date",
+     "label": "Detail row 10 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R14.capital",
+     "label": "Detail row 10 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R14.interest",
+     "label": "Detail row 10 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I14",
+     "label": "Cell I14",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R14.obs",
+     "label": "Detail row 10 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K14",
+     "label": "Cell K14",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R14.security_value",
+     "label": "Detail row 10 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R14.security_type",
+     "label": "Detail row 10 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R14.classification",
+     "label": "Detail row 10 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R14.provision",
+     "label": "Detail row 10 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R14.comments",
+     "label": "Detail row 10 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R15.no",
+     "label": "row 15",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R15.name",
+     "label": "Detail row 11 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R15.branch",
+     "label": "Detail row 11 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R15.sector",
+     "label": "Detail row 11 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R15.facility",
+     "label": "Detail row 11 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R15.expiry_date",
+     "label": "Detail row 11 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R15.capital",
+     "label": "Detail row 11 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R15.interest",
+     "label": "Detail row 11 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I15",
+     "label": "Cell I15",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R15.obs",
+     "label": "Detail row 11 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K15",
+     "label": "Cell K15",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R15.security_value",
+     "label": "Detail row 11 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R15.security_type",
+     "label": "Detail row 11 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R15.classification",
+     "label": "Detail row 11 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R15.provision",
+     "label": "Detail row 11 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R15.comments",
+     "label": "Detail row 11 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R16.no",
+     "label": "row 16",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R16.name",
+     "label": "Detail row 12 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R16.branch",
+     "label": "Detail row 12 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R16.sector",
+     "label": "Detail row 12 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R16.facility",
+     "label": "Detail row 12 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R16.expiry_date",
+     "label": "Detail row 12 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R16.capital",
+     "label": "Detail row 12 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R16.interest",
+     "label": "Detail row 12 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I16",
+     "label": "Cell I16",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R16.obs",
+     "label": "Detail row 12 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K16",
+     "label": "Cell K16",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R16.security_value",
+     "label": "Detail row 12 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R16.security_type",
+     "label": "Detail row 12 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R16.classification",
+     "label": "Detail row 12 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R16.provision",
+     "label": "Detail row 12 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R16.comments",
+     "label": "Detail row 12 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R17.no",
+     "label": "row 17",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R17.name",
+     "label": "Detail row 13 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R17.branch",
+     "label": "Detail row 13 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R17.sector",
+     "label": "Detail row 13 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R17.facility",
+     "label": "Detail row 13 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R17.expiry_date",
+     "label": "Detail row 13 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R17.capital",
+     "label": "Detail row 13 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R17.interest",
+     "label": "Detail row 13 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I17",
+     "label": "Cell I17",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R17.obs",
+     "label": "Detail row 13 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K17",
+     "label": "Cell K17",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R17.security_value",
+     "label": "Detail row 13 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R17.security_type",
+     "label": "Detail row 13 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R17.classification",
+     "label": "Detail row 13 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R17.provision",
+     "label": "Detail row 13 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R17.comments",
+     "label": "Detail row 13 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R18.no",
+     "label": "row 18",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R18.name",
+     "label": "Detail row 14 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R18.branch",
+     "label": "Detail row 14 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R18.sector",
+     "label": "Detail row 14 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R18.facility",
+     "label": "Detail row 14 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R18.expiry_date",
+     "label": "Detail row 14 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R18.capital",
+     "label": "Detail row 14 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R18.interest",
+     "label": "Detail row 14 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I18",
+     "label": "Cell I18",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R18.obs",
+     "label": "Detail row 14 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K18",
+     "label": "Cell K18",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R18.security_value",
+     "label": "Detail row 14 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R18.security_type",
+     "label": "Detail row 14 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R18.classification",
+     "label": "Detail row 14 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R18.provision",
+     "label": "Detail row 14 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R18.comments",
+     "label": "Detail row 14 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R19.no",
+     "label": "row 19",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R19.name",
+     "label": "Detail row 15 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R19.branch",
+     "label": "Detail row 15 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R19.sector",
+     "label": "Detail row 15 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R19.facility",
+     "label": "Detail row 15 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R19.expiry_date",
+     "label": "Detail row 15 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R19.capital",
+     "label": "Detail row 15 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R19.interest",
+     "label": "Detail row 15 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I19",
+     "label": "Cell I19",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R19.obs",
+     "label": "Detail row 15 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K19",
+     "label": "Cell K19",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R19.security_value",
+     "label": "Detail row 15 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R19.security_type",
+     "label": "Detail row 15 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R19.classification",
+     "label": "Detail row 15 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R19.provision",
+     "label": "Detail row 15 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R19.comments",
+     "label": "Detail row 15 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R20.no",
+     "label": "row 20",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R20.name",
+     "label": "Detail row 16 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R20.branch",
+     "label": "Detail row 16 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R20.sector",
+     "label": "Detail row 16 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R20.facility",
+     "label": "Detail row 16 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R20.expiry_date",
+     "label": "Detail row 16 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R20.capital",
+     "label": "Detail row 16 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R20.interest",
+     "label": "Detail row 16 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I20",
+     "label": "Cell I20",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R20.obs",
+     "label": "Detail row 16 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K20",
+     "label": "Cell K20",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R20.security_value",
+     "label": "Detail row 16 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R20.security_type",
+     "label": "Detail row 16 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R20.classification",
+     "label": "Detail row 16 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R20.provision",
+     "label": "Detail row 16 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R20.comments",
+     "label": "Detail row 16 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R21.no",
+     "label": "row 21",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R21.name",
+     "label": "Detail row 17 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R21.branch",
+     "label": "Detail row 17 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R21.sector",
+     "label": "Detail row 17 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R21.facility",
+     "label": "Detail row 17 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R21.expiry_date",
+     "label": "Detail row 17 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R21.capital",
+     "label": "Detail row 17 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R21.interest",
+     "label": "Detail row 17 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I21",
+     "label": "Cell I21",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R21.obs",
+     "label": "Detail row 17 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K21",
+     "label": "Cell K21",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R21.security_value",
+     "label": "Detail row 17 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R21.security_type",
+     "label": "Detail row 17 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R21.classification",
+     "label": "Detail row 17 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R21.provision",
+     "label": "Detail row 17 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R21.comments",
+     "label": "Detail row 17 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R22.no",
+     "label": "row 22",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R22.name",
+     "label": "Detail row 18 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R22.branch",
+     "label": "Detail row 18 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R22.sector",
+     "label": "Detail row 18 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R22.facility",
+     "label": "Detail row 18 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R22.expiry_date",
+     "label": "Detail row 18 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R22.capital",
+     "label": "Detail row 18 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R22.interest",
+     "label": "Detail row 18 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I22",
+     "label": "Cell I22",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R22.obs",
+     "label": "Detail row 18 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K22",
+     "label": "Cell K22",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R22.security_value",
+     "label": "Detail row 18 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R22.security_type",
+     "label": "Detail row 18 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R22.classification",
+     "label": "Detail row 18 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R22.provision",
+     "label": "Detail row 18 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R22.comments",
+     "label": "Detail row 18 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R23.no",
+     "label": "row 23",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R23.name",
+     "label": "Detail row 19 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R23.branch",
+     "label": "Detail row 19 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R23.sector",
+     "label": "Detail row 19 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R23.facility",
+     "label": "Detail row 19 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R23.expiry_date",
+     "label": "Detail row 19 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R23.capital",
+     "label": "Detail row 19 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R23.interest",
+     "label": "Detail row 19 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I23",
+     "label": "Cell I23",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R23.obs",
+     "label": "Detail row 19 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K23",
+     "label": "Cell K23",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R23.security_value",
+     "label": "Detail row 19 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R23.security_type",
+     "label": "Detail row 19 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R23.classification",
+     "label": "Detail row 19 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R23.provision",
+     "label": "Detail row 19 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R23.comments",
+     "label": "Detail row 19 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R24.no",
+     "label": "row 24",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R24.name",
+     "label": "Detail row 20 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R24.branch",
+     "label": "Detail row 20 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R24.sector",
+     "label": "Detail row 20 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R24.facility",
+     "label": "Detail row 20 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R24.expiry_date",
+     "label": "Detail row 20 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R24.capital",
+     "label": "Detail row 20 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R24.interest",
+     "label": "Detail row 20 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I24",
+     "label": "Cell I24",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R24.obs",
+     "label": "Detail row 20 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K24",
+     "label": "Cell K24",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R24.security_value",
+     "label": "Detail row 20 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R24.security_type",
+     "label": "Detail row 20 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R24.classification",
+     "label": "Detail row 20 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R24.provision",
+     "label": "Detail row 20 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R24.comments",
+     "label": "Detail row 20 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R25.no",
+     "label": "row 25",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R25.name",
+     "label": "Detail row 21 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R25.branch",
+     "label": "Detail row 21 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R25.sector",
+     "label": "Detail row 21 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R25.facility",
+     "label": "Detail row 21 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R25.expiry_date",
+     "label": "Detail row 21 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R25.capital",
+     "label": "Detail row 21 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R25.interest",
+     "label": "Detail row 21 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I25",
+     "label": "Cell I25",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R25.obs",
+     "label": "Detail row 21 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K25",
+     "label": "Cell K25",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R25.security_value",
+     "label": "Detail row 21 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R25.security_type",
+     "label": "Detail row 21 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R25.classification",
+     "label": "Detail row 21 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R25.provision",
+     "label": "Detail row 21 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R25.comments",
+     "label": "Detail row 21 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R26.no",
+     "label": "row 26",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R26.name",
+     "label": "Detail row 22 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R26.branch",
+     "label": "Detail row 22 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R26.sector",
+     "label": "Detail row 22 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R26.facility",
+     "label": "Detail row 22 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R26.expiry_date",
+     "label": "Detail row 22 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R26.capital",
+     "label": "Detail row 22 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R26.interest",
+     "label": "Detail row 22 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I26",
+     "label": "Cell I26",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R26.obs",
+     "label": "Detail row 22 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K26",
+     "label": "Cell K26",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R26.security_value",
+     "label": "Detail row 22 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R26.security_type",
+     "label": "Detail row 22 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R26.classification",
+     "label": "Detail row 22 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R26.provision",
+     "label": "Detail row 22 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R26.comments",
+     "label": "Detail row 22 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R27.no",
+     "label": "row 27",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R27.name",
+     "label": "Detail row 23 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R27.branch",
+     "label": "Detail row 23 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R27.sector",
+     "label": "Detail row 23 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R27.facility",
+     "label": "Detail row 23 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R27.expiry_date",
+     "label": "Detail row 23 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R27.capital",
+     "label": "Detail row 23 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R27.interest",
+     "label": "Detail row 23 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I27",
+     "label": "Cell I27",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R27.obs",
+     "label": "Detail row 23 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K27",
+     "label": "Cell K27",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R27.security_value",
+     "label": "Detail row 23 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R27.security_type",
+     "label": "Detail row 23 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R27.classification",
+     "label": "Detail row 23 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R27.provision",
+     "label": "Detail row 23 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R27.comments",
+     "label": "Detail row 23 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R28.no",
+     "label": "row 28",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R28.name",
+     "label": "Detail row 24 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R28.branch",
+     "label": "Detail row 24 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R28.sector",
+     "label": "Detail row 24 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R28.facility",
+     "label": "Detail row 24 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R28.expiry_date",
+     "label": "Detail row 24 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R28.capital",
+     "label": "Detail row 24 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R28.interest",
+     "label": "Detail row 24 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I28",
+     "label": "Cell I28",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R28.obs",
+     "label": "Detail row 24 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K28",
+     "label": "Cell K28",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R28.security_value",
+     "label": "Detail row 24 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R28.security_type",
+     "label": "Detail row 24 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R28.classification",
+     "label": "Detail row 24 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R28.provision",
+     "label": "Detail row 24 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R28.comments",
+     "label": "Detail row 24 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R29.no",
+     "label": "row 29",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R29.name",
+     "label": "Detail row 25 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R29.branch",
+     "label": "Detail row 25 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R29.sector",
+     "label": "Detail row 25 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R29.facility",
+     "label": "Detail row 25 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R29.expiry_date",
+     "label": "Detail row 25 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R29.capital",
+     "label": "Detail row 25 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R29.interest",
+     "label": "Detail row 25 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I29",
+     "label": "Cell I29",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R29.obs",
+     "label": "Detail row 25 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K29",
+     "label": "Cell K29",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R29.security_value",
+     "label": "Detail row 25 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R29.security_type",
+     "label": "Detail row 25 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R29.classification",
+     "label": "Detail row 25 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R29.provision",
+     "label": "Detail row 25 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R29.comments",
+     "label": "Detail row 25 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R30.no",
+     "label": "row 30",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R30.name",
+     "label": "Detail row 26 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R30.branch",
+     "label": "Detail row 26 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R30.sector",
+     "label": "Detail row 26 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R30.facility",
+     "label": "Detail row 26 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R30.expiry_date",
+     "label": "Detail row 26 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R30.capital",
+     "label": "Detail row 26 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R30.interest",
+     "label": "Detail row 26 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I30",
+     "label": "Cell I30",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R30.obs",
+     "label": "Detail row 26 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K30",
+     "label": "Cell K30",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R30.security_value",
+     "label": "Detail row 26 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R30.security_type",
+     "label": "Detail row 26 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R30.classification",
+     "label": "Detail row 26 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R30.provision",
+     "label": "Detail row 26 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R30.comments",
+     "label": "Detail row 26 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R31.no",
+     "label": "row 31",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R31.name",
+     "label": "Detail row 27 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R31.branch",
+     "label": "Detail row 27 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R31.sector",
+     "label": "Detail row 27 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R31.facility",
+     "label": "Detail row 27 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R31.expiry_date",
+     "label": "Detail row 27 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R31.capital",
+     "label": "Detail row 27 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R31.interest",
+     "label": "Detail row 27 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I31",
+     "label": "Cell I31",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R31.obs",
+     "label": "Detail row 27 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K31",
+     "label": "Cell K31",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R31.security_value",
+     "label": "Detail row 27 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R31.security_type",
+     "label": "Detail row 27 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R31.classification",
+     "label": "Detail row 27 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R31.provision",
+     "label": "Detail row 27 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R31.comments",
+     "label": "Detail row 27 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R32.no",
+     "label": "row 32",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R32.name",
+     "label": "Detail row 28 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R32.branch",
+     "label": "Detail row 28 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R32.sector",
+     "label": "Detail row 28 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R32.facility",
+     "label": "Detail row 28 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R32.expiry_date",
+     "label": "Detail row 28 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R32.capital",
+     "label": "Detail row 28 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R32.interest",
+     "label": "Detail row 28 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I32",
+     "label": "Cell I32",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R32.obs",
+     "label": "Detail row 28 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K32",
+     "label": "Cell K32",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R32.security_value",
+     "label": "Detail row 28 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R32.security_type",
+     "label": "Detail row 28 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R32.classification",
+     "label": "Detail row 28 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R32.provision",
+     "label": "Detail row 28 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R32.comments",
+     "label": "Detail row 28 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R33.no",
+     "label": "row 33",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R33.name",
+     "label": "Detail row 29 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R33.branch",
+     "label": "Detail row 29 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R33.sector",
+     "label": "Detail row 29 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R33.facility",
+     "label": "Detail row 29 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R33.expiry_date",
+     "label": "Detail row 29 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R33.capital",
+     "label": "Detail row 29 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R33.interest",
+     "label": "Detail row 29 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I33",
+     "label": "Cell I33",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R33.obs",
+     "label": "Detail row 29 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K33",
+     "label": "Cell K33",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R33.security_value",
+     "label": "Detail row 29 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R33.security_type",
+     "label": "Detail row 29 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R33.classification",
+     "label": "Detail row 29 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R33.provision",
+     "label": "Detail row 29 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R33.comments",
+     "label": "Detail row 29 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R34.no",
+     "label": "row 34",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R34.name",
+     "label": "Detail row 30 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R34.branch",
+     "label": "Detail row 30 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R34.sector",
+     "label": "Detail row 30 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R34.facility",
+     "label": "Detail row 30 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R34.expiry_date",
+     "label": "Detail row 30 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R34.capital",
+     "label": "Detail row 30 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R34.interest",
+     "label": "Detail row 30 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I34",
+     "label": "Cell I34",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R34.obs",
+     "label": "Detail row 30 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K34",
+     "label": "Cell K34",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R34.security_value",
+     "label": "Detail row 30 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R34.security_type",
+     "label": "Detail row 30 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R34.classification",
+     "label": "Detail row 30 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R34.provision",
+     "label": "Detail row 30 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R34.comments",
+     "label": "Detail row 30 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R35.no",
+     "label": "row 35",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R35.name",
+     "label": "Detail row 31 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R35.branch",
+     "label": "Detail row 31 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R35.sector",
+     "label": "Detail row 31 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R35.facility",
+     "label": "Detail row 31 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R35.expiry_date",
+     "label": "Detail row 31 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R35.capital",
+     "label": "Detail row 31 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R35.interest",
+     "label": "Detail row 31 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I35",
+     "label": "Cell I35",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R35.obs",
+     "label": "Detail row 31 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K35",
+     "label": "Cell K35",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R35.security_value",
+     "label": "Detail row 31 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R35.security_type",
+     "label": "Detail row 31 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R35.classification",
+     "label": "Detail row 31 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R35.provision",
+     "label": "Detail row 31 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R35.comments",
+     "label": "Detail row 31 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R36.no",
+     "label": "row 36",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R36.name",
+     "label": "Detail row 32 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R36.branch",
+     "label": "Detail row 32 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R36.sector",
+     "label": "Detail row 32 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R36.facility",
+     "label": "Detail row 32 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R36.expiry_date",
+     "label": "Detail row 32 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R36.capital",
+     "label": "Detail row 32 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R36.interest",
+     "label": "Detail row 32 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I36",
+     "label": "Cell I36",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R36.obs",
+     "label": "Detail row 32 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K36",
+     "label": "Cell K36",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R36.security_value",
+     "label": "Detail row 32 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R36.security_type",
+     "label": "Detail row 32 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R36.classification",
+     "label": "Detail row 32 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R36.provision",
+     "label": "Detail row 32 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R36.comments",
+     "label": "Detail row 32 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R37.no",
+     "label": "row 37",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R37.name",
+     "label": "Detail row 33 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R37.branch",
+     "label": "Detail row 33 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R37.sector",
+     "label": "Detail row 33 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R37.facility",
+     "label": "Detail row 33 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R37.expiry_date",
+     "label": "Detail row 33 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R37.capital",
+     "label": "Detail row 33 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R37.interest",
+     "label": "Detail row 33 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I37",
+     "label": "Cell I37",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R37.obs",
+     "label": "Detail row 33 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K37",
+     "label": "Cell K37",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R37.security_value",
+     "label": "Detail row 33 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R37.security_type",
+     "label": "Detail row 33 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R37.classification",
+     "label": "Detail row 33 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R37.provision",
+     "label": "Detail row 33 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R37.comments",
+     "label": "Detail row 33 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R38.no",
+     "label": "row 38",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R38.name",
+     "label": "Detail row 34 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R38.branch",
+     "label": "Detail row 34 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R38.sector",
+     "label": "Detail row 34 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R38.facility",
+     "label": "Detail row 34 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R38.expiry_date",
+     "label": "Detail row 34 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R38.capital",
+     "label": "Detail row 34 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R38.interest",
+     "label": "Detail row 34 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I38",
+     "label": "Cell I38",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R38.obs",
+     "label": "Detail row 34 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K38",
+     "label": "Cell K38",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R38.security_value",
+     "label": "Detail row 34 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R38.security_type",
+     "label": "Detail row 34 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R38.classification",
+     "label": "Detail row 34 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R38.provision",
+     "label": "Detail row 34 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R38.comments",
+     "label": "Detail row 34 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R39.no",
+     "label": "row 39",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R39.name",
+     "label": "Detail row 35 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R39.branch",
+     "label": "Detail row 35 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R39.sector",
+     "label": "Detail row 35 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R39.facility",
+     "label": "Detail row 35 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R39.expiry_date",
+     "label": "Detail row 35 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R39.capital",
+     "label": "Detail row 35 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R39.interest",
+     "label": "Detail row 35 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I39",
+     "label": "Cell I39",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R39.obs",
+     "label": "Detail row 35 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K39",
+     "label": "Cell K39",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R39.security_value",
+     "label": "Detail row 35 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R39.security_type",
+     "label": "Detail row 35 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R39.classification",
+     "label": "Detail row 35 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R39.provision",
+     "label": "Detail row 35 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R39.comments",
+     "label": "Detail row 35 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R40.no",
+     "label": "row 40",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R40.name",
+     "label": "Detail row 36 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R40.branch",
+     "label": "Detail row 36 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R40.sector",
+     "label": "Detail row 36 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R40.facility",
+     "label": "Detail row 36 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R40.expiry_date",
+     "label": "Detail row 36 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R40.capital",
+     "label": "Detail row 36 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R40.interest",
+     "label": "Detail row 36 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I40",
+     "label": "Cell I40",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R40.obs",
+     "label": "Detail row 36 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K40",
+     "label": "Cell K40",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R40.security_value",
+     "label": "Detail row 36 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R40.security_type",
+     "label": "Detail row 36 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R40.classification",
+     "label": "Detail row 36 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R40.provision",
+     "label": "Detail row 36 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R40.comments",
+     "label": "Detail row 36 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R41.no",
+     "label": "row 41",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R41.name",
+     "label": "Detail row 37 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R41.branch",
+     "label": "Detail row 37 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R41.sector",
+     "label": "Detail row 37 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R41.facility",
+     "label": "Detail row 37 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R41.expiry_date",
+     "label": "Detail row 37 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R41.capital",
+     "label": "Detail row 37 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R41.interest",
+     "label": "Detail row 37 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I41",
+     "label": "Cell I41",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R41.obs",
+     "label": "Detail row 37 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K41",
+     "label": "Cell K41",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R41.security_value",
+     "label": "Detail row 37 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R41.security_type",
+     "label": "Detail row 37 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R41.classification",
+     "label": "Detail row 37 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R41.provision",
+     "label": "Detail row 37 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R41.comments",
+     "label": "Detail row 37 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R42.no",
+     "label": "row 42",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R42.name",
+     "label": "Detail row 38 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R42.branch",
+     "label": "Detail row 38 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R42.sector",
+     "label": "Detail row 38 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R42.facility",
+     "label": "Detail row 38 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R42.expiry_date",
+     "label": "Detail row 38 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R42.capital",
+     "label": "Detail row 38 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R42.interest",
+     "label": "Detail row 38 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I42",
+     "label": "Cell I42",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R42.obs",
+     "label": "Detail row 38 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K42",
+     "label": "Cell K42",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R42.security_value",
+     "label": "Detail row 38 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R42.security_type",
+     "label": "Detail row 38 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R42.classification",
+     "label": "Detail row 38 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R42.provision",
+     "label": "Detail row 38 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R42.comments",
+     "label": "Detail row 38 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R43.no",
+     "label": "row 43",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R43.name",
+     "label": "Detail row 39 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R43.branch",
+     "label": "Detail row 39 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R43.sector",
+     "label": "Detail row 39 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R43.facility",
+     "label": "Detail row 39 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R43.expiry_date",
+     "label": "Detail row 39 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R43.capital",
+     "label": "Detail row 39 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R43.interest",
+     "label": "Detail row 39 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I43",
+     "label": "Cell I43",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R43.obs",
+     "label": "Detail row 39 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K43",
+     "label": "Cell K43",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R43.security_value",
+     "label": "Detail row 39 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R43.security_type",
+     "label": "Detail row 39 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R43.classification",
+     "label": "Detail row 39 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R43.provision",
+     "label": "Detail row 39 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R43.comments",
+     "label": "Detail row 39 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R44.no",
+     "label": "row 44",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R44.name",
+     "label": "Detail row 40 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R44.branch",
+     "label": "Detail row 40 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R44.sector",
+     "label": "Detail row 40 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R44.facility",
+     "label": "Detail row 40 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R44.expiry_date",
+     "label": "Detail row 40 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R44.capital",
+     "label": "Detail row 40 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R44.interest",
+     "label": "Detail row 40 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I44",
+     "label": "Cell I44",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R44.obs",
+     "label": "Detail row 40 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K44",
+     "label": "Cell K44",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R44.security_value",
+     "label": "Detail row 40 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R44.security_type",
+     "label": "Detail row 40 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R44.classification",
+     "label": "Detail row 40 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R44.provision",
+     "label": "Detail row 40 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R44.comments",
+     "label": "Detail row 40 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R45.no",
+     "label": "row 45",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R45.name",
+     "label": "Detail row 41 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R45.branch",
+     "label": "Detail row 41 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R45.sector",
+     "label": "Detail row 41 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R45.facility",
+     "label": "Detail row 41 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R45.expiry_date",
+     "label": "Detail row 41 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R45.capital",
+     "label": "Detail row 41 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R45.interest",
+     "label": "Detail row 41 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I45",
+     "label": "Cell I45",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R45.obs",
+     "label": "Detail row 41 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K45",
+     "label": "Cell K45",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R45.security_value",
+     "label": "Detail row 41 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R45.security_type",
+     "label": "Detail row 41 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R45.classification",
+     "label": "Detail row 41 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R45.provision",
+     "label": "Detail row 41 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R45.comments",
+     "label": "Detail row 41 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R46.no",
+     "label": "row 46",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R46.name",
+     "label": "Detail row 42 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R46.branch",
+     "label": "Detail row 42 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R46.sector",
+     "label": "Detail row 42 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R46.facility",
+     "label": "Detail row 42 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R46.expiry_date",
+     "label": "Detail row 42 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R46.capital",
+     "label": "Detail row 42 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R46.interest",
+     "label": "Detail row 42 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I46",
+     "label": "Cell I46",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R46.obs",
+     "label": "Detail row 42 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K46",
+     "label": "Cell K46",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R46.security_value",
+     "label": "Detail row 42 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R46.security_type",
+     "label": "Detail row 42 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R46.classification",
+     "label": "Detail row 42 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R46.provision",
+     "label": "Detail row 42 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R46.comments",
+     "label": "Detail row 42 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R47.no",
+     "label": "row 47",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R47.name",
+     "label": "Detail row 43 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R47.branch",
+     "label": "Detail row 43 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R47.sector",
+     "label": "Detail row 43 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R47.facility",
+     "label": "Detail row 43 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R47.expiry_date",
+     "label": "Detail row 43 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R47.capital",
+     "label": "Detail row 43 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R47.interest",
+     "label": "Detail row 43 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I47",
+     "label": "Cell I47",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R47.obs",
+     "label": "Detail row 43 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K47",
+     "label": "Cell K47",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R47.security_value",
+     "label": "Detail row 43 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R47.security_type",
+     "label": "Detail row 43 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R47.classification",
+     "label": "Detail row 43 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R47.provision",
+     "label": "Detail row 43 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R47.comments",
+     "label": "Detail row 43 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R48.no",
+     "label": "row 48",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R48.name",
+     "label": "Detail row 44 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R48.branch",
+     "label": "Detail row 44 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R48.sector",
+     "label": "Detail row 44 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R48.facility",
+     "label": "Detail row 44 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R48.expiry_date",
+     "label": "Detail row 44 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R48.capital",
+     "label": "Detail row 44 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R48.interest",
+     "label": "Detail row 44 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I48",
+     "label": "Cell I48",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R48.obs",
+     "label": "Detail row 44 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K48",
+     "label": "Cell K48",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R48.security_value",
+     "label": "Detail row 44 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R48.security_type",
+     "label": "Detail row 44 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R48.classification",
+     "label": "Detail row 44 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R48.provision",
+     "label": "Detail row 44 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R48.comments",
+     "label": "Detail row 44 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R49.no",
+     "label": "row 49",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R49.name",
+     "label": "Detail row 45 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R49.branch",
+     "label": "Detail row 45 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R49.sector",
+     "label": "Detail row 45 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R49.facility",
+     "label": "Detail row 45 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R49.expiry_date",
+     "label": "Detail row 45 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R49.capital",
+     "label": "Detail row 45 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R49.interest",
+     "label": "Detail row 45 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I49",
+     "label": "Cell I49",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R49.obs",
+     "label": "Detail row 45 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K49",
+     "label": "Cell K49",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R49.security_value",
+     "label": "Detail row 45 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R49.security_type",
+     "label": "Detail row 45 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R49.classification",
+     "label": "Detail row 45 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R49.provision",
+     "label": "Detail row 45 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R49.comments",
+     "label": "Detail row 45 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R50.no",
+     "label": "row 50",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R50.name",
+     "label": "Detail row 46 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R50.branch",
+     "label": "Detail row 46 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R50.sector",
+     "label": "Detail row 46 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R50.facility",
+     "label": "Detail row 46 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R50.expiry_date",
+     "label": "Detail row 46 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R50.capital",
+     "label": "Detail row 46 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R50.interest",
+     "label": "Detail row 46 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I50",
+     "label": "Cell I50",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R50.obs",
+     "label": "Detail row 46 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K50",
+     "label": "Cell K50",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R50.security_value",
+     "label": "Detail row 46 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R50.security_type",
+     "label": "Detail row 46 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R50.classification",
+     "label": "Detail row 46 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R50.provision",
+     "label": "Detail row 46 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R50.comments",
+     "label": "Detail row 46 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R51.no",
+     "label": "row 51",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R51.name",
+     "label": "Detail row 47 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R51.branch",
+     "label": "Detail row 47 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R51.sector",
+     "label": "Detail row 47 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R51.facility",
+     "label": "Detail row 47 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R51.expiry_date",
+     "label": "Detail row 47 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R51.capital",
+     "label": "Detail row 47 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R51.interest",
+     "label": "Detail row 47 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I51",
+     "label": "Cell I51",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R51.obs",
+     "label": "Detail row 47 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K51",
+     "label": "Cell K51",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R51.security_value",
+     "label": "Detail row 47 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R51.security_type",
+     "label": "Detail row 47 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R51.classification",
+     "label": "Detail row 47 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R51.provision",
+     "label": "Detail row 47 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R51.comments",
+     "label": "Detail row 47 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R52.no",
+     "label": "row 52",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R52.name",
+     "label": "Detail row 48 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R52.branch",
+     "label": "Detail row 48 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R52.sector",
+     "label": "Detail row 48 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R52.facility",
+     "label": "Detail row 48 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R52.expiry_date",
+     "label": "Detail row 48 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R52.capital",
+     "label": "Detail row 48 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R52.interest",
+     "label": "Detail row 48 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I52",
+     "label": "Cell I52",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R52.obs",
+     "label": "Detail row 48 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K52",
+     "label": "Cell K52",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R52.security_value",
+     "label": "Detail row 48 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R52.security_type",
+     "label": "Detail row 48 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R52.classification",
+     "label": "Detail row 48 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R52.provision",
+     "label": "Detail row 48 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R52.comments",
+     "label": "Detail row 48 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R53.no",
+     "label": "row 53",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R53.name",
+     "label": "Detail row 49 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R53.branch",
+     "label": "Detail row 49 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R53.sector",
+     "label": "Detail row 49 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R53.facility",
+     "label": "Detail row 49 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R53.expiry_date",
+     "label": "Detail row 49 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R53.capital",
+     "label": "Detail row 49 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R53.interest",
+     "label": "Detail row 49 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I53",
+     "label": "Cell I53",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R53.obs",
+     "label": "Detail row 49 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K53",
+     "label": "Cell K53",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R53.security_value",
+     "label": "Detail row 49 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R53.security_type",
+     "label": "Detail row 49 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R53.classification",
+     "label": "Detail row 49 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R53.provision",
+     "label": "Detail row 49 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R53.comments",
+     "label": "Detail row 49 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.No.R54.no",
+     "label": "row 54",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD8.Annexure.R54.name",
+     "label": "Detail row 50 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R54.branch",
+     "label": "Detail row 50 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R54.sector",
+     "label": "Detail row 50 — sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R54.facility",
+     "label": "Detail row 50 — facility",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R54.expiry_date",
+     "label": "Detail row 50 — expiry date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R54.capital",
+     "label": "Detail row 50 — capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8.Annexure.R54.interest",
+     "label": "Detail row 50 — interest",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!I54",
+     "label": "Cell I54",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R54.obs",
+     "label": "Detail row 50 — obs",
+     "kind": "number"
+    },
+    {
+     "code": "BSD8-Annexure!K54",
+     "label": "Cell K54",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8.Annexure.R54.security_value",
+     "label": "Detail row 50 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R54.security_type",
+     "label": "Detail row 50 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R54.classification",
+     "label": "Detail row 50 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R54.provision",
+     "label": "Detail row 50 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8.Annexure.R54.comments",
+     "label": "Detail row 50 — comments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD8-Annexure!G55",
+     "label": "TOTAL",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8-Annexure!H55",
+     "label": "TOTAL",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8-Annexure!I55",
+     "label": "TOTAL",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8-Annexure!J55",
+     "label": "TOTAL",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD8-Annexure!K55",
+     "label": "TOTAL",
+     "kind": "number",
+     "total": true
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "BSD8-ARI-0001",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H7",
+   "terms": [
+    "BSD8.R7.current",
+    "BSD8.R7.olem",
+    "BSD8.R7.substandard",
+    "BSD8.R7.doubtful",
+    "BSD8.R7.loss"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H7 follows the template formula =SUM(C7:G7)"
+  },
+  {
+   "id": "BSD8-ARI-0002",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H8",
+   "terms": [
+    "BSD8.R8.current",
+    "BSD8.R8.olem",
+    "BSD8.R8.substandard",
+    "BSD8.R8.doubtful",
+    "BSD8.R8.loss"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H8 follows the template formula =SUM(C8:G8)"
+  },
+  {
+   "id": "BSD8-ARI-0003",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H9",
+   "terms": [
+    "BSD8.R9.current",
+    "BSD8.R9.olem",
+    "BSD8.R9.substandard",
+    "BSD8.R9.doubtful",
+    "BSD8.R9.loss"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H9 follows the template formula =SUM(C9:G9)"
+  },
+  {
+   "id": "BSD8-ARI-0004",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H10",
+   "terms": [
+    "BSD8.R10.current",
+    "BSD8.R10.olem",
+    "BSD8.R10.substandard",
+    "BSD8.R10.doubtful",
+    "BSD8.R10.loss"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H10 follows the template formula =SUM(C10:G10)"
+  },
+  {
+   "id": "BSD8-ARI-0005",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H11",
+   "terms": [
+    "BSD8.R11.current",
+    "BSD8.R11.olem",
+    "BSD8.R11.substandard",
+    "BSD8.R11.doubtful",
+    "BSD8.R11.loss"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H11 follows the template formula =SUM(C11:G11)"
+  },
+  {
+   "id": "BSD8-ARI-0006",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H12",
+   "terms": [
+    "BSD8.R12.current",
+    "BSD8.R12.olem",
+    "BSD8.R12.substandard",
+    "BSD8.R12.doubtful",
+    "BSD8.R12.loss"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H12 follows the template formula =SUM(C12:G12)"
+  },
+  {
+   "id": "BSD8-ARI-0007",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H13",
+   "terms": [
+    "BSD8.R13.current",
+    "BSD8.R13.olem",
+    "BSD8.R13.substandard",
+    "BSD8.R13.doubtful",
+    "BSD8.R13.loss"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H13 follows the template formula =SUM(C13:G13)"
+  },
+  {
+   "id": "BSD8-ARI-0008",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!C14",
+   "terms": [
+    "BSD8.R7.current",
+    "BSD8.R8.current",
+    "BSD8.R9.current",
+    "BSD8.R10.current",
+    "BSD8.R11.current",
+    "BSD8.R12.current",
+    "BSD8.R13.current"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD8!C14 follows the template formula =SUM(C7:C13)"
+  },
+  {
+   "id": "BSD8-ARI-0009",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!D14",
+   "terms": [
+    "BSD8.R7.olem",
+    "BSD8.R8.olem",
+    "BSD8.R9.olem",
+    "BSD8.R10.olem",
+    "BSD8.R11.olem",
+    "BSD8.R12.olem",
+    "BSD8.R13.olem"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD8!D14 follows the template formula =SUM(D7:D13)"
+  },
+  {
+   "id": "BSD8-ARI-0010",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!E14",
+   "terms": [
+    "BSD8.R7.substandard",
+    "BSD8.R8.substandard",
+    "BSD8.R9.substandard",
+    "BSD8.R10.substandard",
+    "BSD8.R11.substandard",
+    "BSD8.R12.substandard",
+    "BSD8.R13.substandard"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD8!E14 follows the template formula =SUM(E7:E13)"
+  },
+  {
+   "id": "BSD8-ARI-0011",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!F14",
+   "terms": [
+    "BSD8.R7.doubtful",
+    "BSD8.R8.doubtful",
+    "BSD8.R9.doubtful",
+    "BSD8.R10.doubtful",
+    "BSD8.R11.doubtful",
+    "BSD8.R12.doubtful",
+    "BSD8.R13.doubtful"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD8!F14 follows the template formula =SUM(F7:F13)"
+  },
+  {
+   "id": "BSD8-ARI-0012",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!G14",
+   "terms": [
+    "BSD8.R7.loss",
+    "BSD8.R8.loss",
+    "BSD8.R9.loss",
+    "BSD8.R10.loss",
+    "BSD8.R11.loss",
+    "BSD8.R12.loss",
+    "BSD8.R13.loss"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD8!G14 follows the template formula =SUM(G7:G13)"
+  },
+  {
+   "id": "BSD8-ARI-0013",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H14",
+   "terms": [
+    "BSD8!C14",
+    "BSD8!D14",
+    "BSD8!E14",
+    "BSD8!F14",
+    "BSD8!G14"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H14 follows the template formula =SUM(C14:G14)"
+  },
+  {
+   "id": "BSD8-ARI-0014",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H15",
+   "terms": [
+    "BSD8.R15.current",
+    "BSD8.R15.olem",
+    "BSD8.R15.substandard",
+    "BSD8.R15.doubtful",
+    "BSD8.R15.loss"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H15 follows the template formula =SUM(C15:G15)"
+  },
+  {
+   "id": "BSD8-ARI-0015",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H16",
+   "terms": [
+    "BSD8.R16.current",
+    "BSD8.R16.olem",
+    "BSD8.R16.substandard",
+    "BSD8.R16.doubtful",
+    "BSD8.R16.loss"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H16 follows the template formula =SUM(C16:G16)"
+  },
+  {
+   "id": "BSD8-ARI-0016",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H17",
+   "terms": [
+    "BSD8.R17.current",
+    "BSD8.R17.olem",
+    "BSD8.R17.substandard",
+    "BSD8.R17.doubtful",
+    "BSD8.R17.loss"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H17 follows the template formula =SUM(C17:G17)"
+  },
+  {
+   "id": "BSD8-ARI-0017",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H18",
+   "terms": [
+    "BSD8.R18.current",
+    "BSD8.R18.olem",
+    "BSD8.R18.substandard",
+    "BSD8.R18.doubtful",
+    "BSD8.R18.loss"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H18 follows the template formula =SUM(C18:G18)"
+  },
+  {
+   "id": "BSD8-ARI-0018",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!C19",
+   "terms": [
+    "BSD8!C14"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD8!C19 follows the template formula =C14-C16-C17-C18",
+   "subtract": [
+    "BSD8.R16.current",
+    "BSD8.R17.current",
+    "BSD8.R18.current"
+   ]
+  },
+  {
+   "id": "BSD8-ARI-0019",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!D19",
+   "terms": [
+    "BSD8!D14"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD8!D19 follows the template formula =D14-D16-D17-D18",
+   "subtract": [
+    "BSD8.R16.olem",
+    "BSD8.R17.olem",
+    "BSD8.R18.olem"
+   ]
+  },
+  {
+   "id": "BSD8-ARI-0020",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!E19",
+   "terms": [
+    "BSD8!E14"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD8!E19 follows the template formula =E14-E16-E17-E18",
+   "subtract": [
+    "BSD8.R16.substandard",
+    "BSD8.R17.substandard",
+    "BSD8.R18.substandard"
+   ]
+  },
+  {
+   "id": "BSD8-ARI-0021",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!F19",
+   "terms": [
+    "BSD8!F14"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD8!F19 follows the template formula =F14-F16-F17-F18",
+   "subtract": [
+    "BSD8.R16.doubtful",
+    "BSD8.R17.doubtful",
+    "BSD8.R18.doubtful"
+   ]
+  },
+  {
+   "id": "BSD8-ARI-0022",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!G19",
+   "terms": [
+    "BSD8!G14"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD8!G19 follows the template formula =G14-G16-G17-G18",
+   "subtract": [
+    "BSD8.R16.loss",
+    "BSD8.R17.loss",
+    "BSD8.R18.loss"
+   ]
+  },
+  {
+   "id": "BSD8-ARI-0023",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H19",
+   "terms": [
+    "BSD8!C19",
+    "BSD8!D19",
+    "BSD8!E19",
+    "BSD8!F19",
+    "BSD8!G19"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H19 follows the template formula =SUM(C19:G19)"
+  },
+  {
+   "id": "BSD8-ARI-0024",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H20",
+   "terms": [
+    "BSD8.R20.current",
+    "BSD8.R20.olem",
+    "BSD8.R20.substandard",
+    "BSD8.R20.doubtful",
+    "BSD8.R20.loss"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H20 follows the template formula =SUM(C20:G20)"
+  },
+  {
+   "id": "BSD8-ARI-0025",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8!H21",
+   "terms": [
+    "BSD8.R21.current",
+    "BSD8.R21.olem",
+    "BSD8.R21.substandard",
+    "BSD8.R21.doubtful",
+    "BSD8.R21.loss"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD8!H21 follows the template formula =SUM(C21:G21)"
+  },
+  {
+   "id": "BSD8-ARI-0026",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I5",
+   "terms": [
+    "BSD8.Annexure.R5.capital",
+    "BSD8.Annexure.R5.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I5 follows the template formula =G5+H5"
+  },
+  {
+   "id": "BSD8-ARI-0027",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K5",
+   "terms": [
+    "BSD8-Annexure!I5",
+    "BSD8.Annexure.R5.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K5 follows the template formula =I5+J5"
+  },
+  {
+   "id": "BSD8-ARI-0028",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I6",
+   "terms": [
+    "BSD8.Annexure.R6.capital",
+    "BSD8.Annexure.R6.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I6 follows the template formula =G6+H6"
+  },
+  {
+   "id": "BSD8-ARI-0029",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K6",
+   "terms": [
+    "BSD8-Annexure!I6",
+    "BSD8.Annexure.R6.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K6 follows the template formula =I6+J6"
+  },
+  {
+   "id": "BSD8-ARI-0030",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I7",
+   "terms": [
+    "BSD8.Annexure.R7.capital",
+    "BSD8.Annexure.R7.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I7 follows the template formula =G7+H7"
+  },
+  {
+   "id": "BSD8-ARI-0031",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K7",
+   "terms": [
+    "BSD8-Annexure!I7",
+    "BSD8.Annexure.R7.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K7 follows the template formula =I7+J7"
+  },
+  {
+   "id": "BSD8-ARI-0032",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I8",
+   "terms": [
+    "BSD8.Annexure.R8.capital",
+    "BSD8.Annexure.R8.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I8 follows the template formula =G8+H8"
+  },
+  {
+   "id": "BSD8-ARI-0033",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K8",
+   "terms": [
+    "BSD8-Annexure!I8",
+    "BSD8.Annexure.R8.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K8 follows the template formula =I8+J8"
+  },
+  {
+   "id": "BSD8-ARI-0034",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I9",
+   "terms": [
+    "BSD8.Annexure.R9.capital",
+    "BSD8.Annexure.R9.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I9 follows the template formula =G9+H9"
+  },
+  {
+   "id": "BSD8-ARI-0035",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K9",
+   "terms": [
+    "BSD8-Annexure!I9",
+    "BSD8.Annexure.R9.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K9 follows the template formula =I9+J9"
+  },
+  {
+   "id": "BSD8-ARI-0036",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I10",
+   "terms": [
+    "BSD8.Annexure.R10.capital",
+    "BSD8.Annexure.R10.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I10 follows the template formula =G10+H10"
+  },
+  {
+   "id": "BSD8-ARI-0037",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K10",
+   "terms": [
+    "BSD8-Annexure!I10",
+    "BSD8.Annexure.R10.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K10 follows the template formula =I10+J10"
+  },
+  {
+   "id": "BSD8-ARI-0038",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I11",
+   "terms": [
+    "BSD8.Annexure.R11.capital",
+    "BSD8.Annexure.R11.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I11 follows the template formula =G11+H11"
+  },
+  {
+   "id": "BSD8-ARI-0039",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K11",
+   "terms": [
+    "BSD8-Annexure!I11",
+    "BSD8.Annexure.R11.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K11 follows the template formula =I11+J11"
+  },
+  {
+   "id": "BSD8-ARI-0040",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I12",
+   "terms": [
+    "BSD8.Annexure.R12.capital",
+    "BSD8.Annexure.R12.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I12 follows the template formula =G12+H12"
+  },
+  {
+   "id": "BSD8-ARI-0041",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K12",
+   "terms": [
+    "BSD8-Annexure!I12",
+    "BSD8.Annexure.R12.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K12 follows the template formula =I12+J12"
+  },
+  {
+   "id": "BSD8-ARI-0042",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I13",
+   "terms": [
+    "BSD8.Annexure.R13.capital",
+    "BSD8.Annexure.R13.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I13 follows the template formula =G13+H13"
+  },
+  {
+   "id": "BSD8-ARI-0043",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K13",
+   "terms": [
+    "BSD8-Annexure!I13",
+    "BSD8.Annexure.R13.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K13 follows the template formula =I13+J13"
+  },
+  {
+   "id": "BSD8-ARI-0044",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I14",
+   "terms": [
+    "BSD8.Annexure.R14.capital",
+    "BSD8.Annexure.R14.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I14 follows the template formula =G14+H14"
+  },
+  {
+   "id": "BSD8-ARI-0045",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K14",
+   "terms": [
+    "BSD8-Annexure!I14",
+    "BSD8.Annexure.R14.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K14 follows the template formula =I14+J14"
+  },
+  {
+   "id": "BSD8-ARI-0046",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I15",
+   "terms": [
+    "BSD8.Annexure.R15.capital",
+    "BSD8.Annexure.R15.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I15 follows the template formula =G15+H15"
+  },
+  {
+   "id": "BSD8-ARI-0047",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K15",
+   "terms": [
+    "BSD8-Annexure!I15",
+    "BSD8.Annexure.R15.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K15 follows the template formula =I15+J15"
+  },
+  {
+   "id": "BSD8-ARI-0048",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I16",
+   "terms": [
+    "BSD8.Annexure.R16.capital",
+    "BSD8.Annexure.R16.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I16 follows the template formula =G16+H16"
+  },
+  {
+   "id": "BSD8-ARI-0049",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K16",
+   "terms": [
+    "BSD8-Annexure!I16",
+    "BSD8.Annexure.R16.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K16 follows the template formula =I16+J16"
+  },
+  {
+   "id": "BSD8-ARI-0050",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I17",
+   "terms": [
+    "BSD8.Annexure.R17.capital",
+    "BSD8.Annexure.R17.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I17 follows the template formula =G17+H17"
+  },
+  {
+   "id": "BSD8-ARI-0051",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K17",
+   "terms": [
+    "BSD8-Annexure!I17",
+    "BSD8.Annexure.R17.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K17 follows the template formula =I17+J17"
+  },
+  {
+   "id": "BSD8-ARI-0052",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I18",
+   "terms": [
+    "BSD8.Annexure.R18.capital",
+    "BSD8.Annexure.R18.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I18 follows the template formula =G18+H18"
+  },
+  {
+   "id": "BSD8-ARI-0053",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K18",
+   "terms": [
+    "BSD8-Annexure!I18",
+    "BSD8.Annexure.R18.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K18 follows the template formula =I18+J18"
+  },
+  {
+   "id": "BSD8-ARI-0054",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I19",
+   "terms": [
+    "BSD8.Annexure.R19.capital",
+    "BSD8.Annexure.R19.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I19 follows the template formula =G19+H19"
+  },
+  {
+   "id": "BSD8-ARI-0055",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K19",
+   "terms": [
+    "BSD8-Annexure!I19",
+    "BSD8.Annexure.R19.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K19 follows the template formula =I19+J19"
+  },
+  {
+   "id": "BSD8-ARI-0056",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I20",
+   "terms": [
+    "BSD8.Annexure.R20.capital",
+    "BSD8.Annexure.R20.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I20 follows the template formula =G20+H20"
+  },
+  {
+   "id": "BSD8-ARI-0057",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K20",
+   "terms": [
+    "BSD8-Annexure!I20",
+    "BSD8.Annexure.R20.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K20 follows the template formula =I20+J20"
+  },
+  {
+   "id": "BSD8-ARI-0058",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I21",
+   "terms": [
+    "BSD8.Annexure.R21.capital",
+    "BSD8.Annexure.R21.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I21 follows the template formula =G21+H21"
+  },
+  {
+   "id": "BSD8-ARI-0059",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K21",
+   "terms": [
+    "BSD8-Annexure!I21",
+    "BSD8.Annexure.R21.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K21 follows the template formula =I21+J21"
+  },
+  {
+   "id": "BSD8-ARI-0060",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I22",
+   "terms": [
+    "BSD8.Annexure.R22.capital",
+    "BSD8.Annexure.R22.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I22 follows the template formula =G22+H22"
+  },
+  {
+   "id": "BSD8-ARI-0061",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K22",
+   "terms": [
+    "BSD8-Annexure!I22",
+    "BSD8.Annexure.R22.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K22 follows the template formula =I22+J22"
+  },
+  {
+   "id": "BSD8-ARI-0062",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I23",
+   "terms": [
+    "BSD8.Annexure.R23.capital",
+    "BSD8.Annexure.R23.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I23 follows the template formula =G23+H23"
+  },
+  {
+   "id": "BSD8-ARI-0063",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K23",
+   "terms": [
+    "BSD8-Annexure!I23",
+    "BSD8.Annexure.R23.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K23 follows the template formula =I23+J23"
+  },
+  {
+   "id": "BSD8-ARI-0064",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I24",
+   "terms": [
+    "BSD8.Annexure.R24.capital",
+    "BSD8.Annexure.R24.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I24 follows the template formula =G24+H24"
+  },
+  {
+   "id": "BSD8-ARI-0065",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K24",
+   "terms": [
+    "BSD8-Annexure!I24",
+    "BSD8.Annexure.R24.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K24 follows the template formula =I24+J24"
+  },
+  {
+   "id": "BSD8-ARI-0066",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I25",
+   "terms": [
+    "BSD8.Annexure.R25.capital",
+    "BSD8.Annexure.R25.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I25 follows the template formula =G25+H25"
+  },
+  {
+   "id": "BSD8-ARI-0067",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K25",
+   "terms": [
+    "BSD8-Annexure!I25",
+    "BSD8.Annexure.R25.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K25 follows the template formula =I25+J25"
+  },
+  {
+   "id": "BSD8-ARI-0068",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I26",
+   "terms": [
+    "BSD8.Annexure.R26.capital",
+    "BSD8.Annexure.R26.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I26 follows the template formula =G26+H26"
+  },
+  {
+   "id": "BSD8-ARI-0069",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K26",
+   "terms": [
+    "BSD8-Annexure!I26",
+    "BSD8.Annexure.R26.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K26 follows the template formula =I26+J26"
+  },
+  {
+   "id": "BSD8-ARI-0070",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I27",
+   "terms": [
+    "BSD8.Annexure.R27.capital",
+    "BSD8.Annexure.R27.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I27 follows the template formula =G27+H27"
+  },
+  {
+   "id": "BSD8-ARI-0071",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K27",
+   "terms": [
+    "BSD8-Annexure!I27",
+    "BSD8.Annexure.R27.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K27 follows the template formula =I27+J27"
+  },
+  {
+   "id": "BSD8-ARI-0072",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I28",
+   "terms": [
+    "BSD8.Annexure.R28.capital",
+    "BSD8.Annexure.R28.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I28 follows the template formula =G28+H28"
+  },
+  {
+   "id": "BSD8-ARI-0073",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K28",
+   "terms": [
+    "BSD8-Annexure!I28",
+    "BSD8.Annexure.R28.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K28 follows the template formula =I28+J28"
+  },
+  {
+   "id": "BSD8-ARI-0074",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I29",
+   "terms": [
+    "BSD8.Annexure.R29.capital",
+    "BSD8.Annexure.R29.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I29 follows the template formula =G29+H29"
+  },
+  {
+   "id": "BSD8-ARI-0075",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K29",
+   "terms": [
+    "BSD8-Annexure!I29",
+    "BSD8.Annexure.R29.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K29 follows the template formula =I29+J29"
+  },
+  {
+   "id": "BSD8-ARI-0076",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I30",
+   "terms": [
+    "BSD8.Annexure.R30.capital",
+    "BSD8.Annexure.R30.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I30 follows the template formula =G30+H30"
+  },
+  {
+   "id": "BSD8-ARI-0077",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K30",
+   "terms": [
+    "BSD8-Annexure!I30",
+    "BSD8.Annexure.R30.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K30 follows the template formula =I30+J30"
+  },
+  {
+   "id": "BSD8-ARI-0078",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I31",
+   "terms": [
+    "BSD8.Annexure.R31.capital",
+    "BSD8.Annexure.R31.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I31 follows the template formula =G31+H31"
+  },
+  {
+   "id": "BSD8-ARI-0079",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K31",
+   "terms": [
+    "BSD8-Annexure!I31",
+    "BSD8.Annexure.R31.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K31 follows the template formula =I31+J31"
+  },
+  {
+   "id": "BSD8-ARI-0080",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I32",
+   "terms": [
+    "BSD8.Annexure.R32.capital",
+    "BSD8.Annexure.R32.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I32 follows the template formula =G32+H32"
+  },
+  {
+   "id": "BSD8-ARI-0081",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K32",
+   "terms": [
+    "BSD8-Annexure!I32",
+    "BSD8.Annexure.R32.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K32 follows the template formula =I32+J32"
+  },
+  {
+   "id": "BSD8-ARI-0082",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I33",
+   "terms": [
+    "BSD8.Annexure.R33.capital",
+    "BSD8.Annexure.R33.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I33 follows the template formula =G33+H33"
+  },
+  {
+   "id": "BSD8-ARI-0083",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K33",
+   "terms": [
+    "BSD8-Annexure!I33",
+    "BSD8.Annexure.R33.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K33 follows the template formula =I33+J33"
+  },
+  {
+   "id": "BSD8-ARI-0084",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I34",
+   "terms": [
+    "BSD8.Annexure.R34.capital",
+    "BSD8.Annexure.R34.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I34 follows the template formula =G34+H34"
+  },
+  {
+   "id": "BSD8-ARI-0085",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K34",
+   "terms": [
+    "BSD8-Annexure!I34",
+    "BSD8.Annexure.R34.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K34 follows the template formula =I34+J34"
+  },
+  {
+   "id": "BSD8-ARI-0086",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I35",
+   "terms": [
+    "BSD8.Annexure.R35.capital",
+    "BSD8.Annexure.R35.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I35 follows the template formula =G35+H35"
+  },
+  {
+   "id": "BSD8-ARI-0087",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K35",
+   "terms": [
+    "BSD8-Annexure!I35",
+    "BSD8.Annexure.R35.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K35 follows the template formula =I35+J35"
+  },
+  {
+   "id": "BSD8-ARI-0088",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I36",
+   "terms": [
+    "BSD8.Annexure.R36.capital",
+    "BSD8.Annexure.R36.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I36 follows the template formula =G36+H36"
+  },
+  {
+   "id": "BSD8-ARI-0089",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K36",
+   "terms": [
+    "BSD8-Annexure!I36",
+    "BSD8.Annexure.R36.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K36 follows the template formula =I36+J36"
+  },
+  {
+   "id": "BSD8-ARI-0090",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I37",
+   "terms": [
+    "BSD8.Annexure.R37.capital",
+    "BSD8.Annexure.R37.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I37 follows the template formula =G37+H37"
+  },
+  {
+   "id": "BSD8-ARI-0091",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K37",
+   "terms": [
+    "BSD8-Annexure!I37",
+    "BSD8.Annexure.R37.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K37 follows the template formula =I37+J37"
+  },
+  {
+   "id": "BSD8-ARI-0092",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I38",
+   "terms": [
+    "BSD8.Annexure.R38.capital",
+    "BSD8.Annexure.R38.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I38 follows the template formula =G38+H38"
+  },
+  {
+   "id": "BSD8-ARI-0093",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K38",
+   "terms": [
+    "BSD8-Annexure!I38",
+    "BSD8.Annexure.R38.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K38 follows the template formula =I38+J38"
+  },
+  {
+   "id": "BSD8-ARI-0094",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I39",
+   "terms": [
+    "BSD8.Annexure.R39.capital",
+    "BSD8.Annexure.R39.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I39 follows the template formula =G39+H39"
+  },
+  {
+   "id": "BSD8-ARI-0095",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K39",
+   "terms": [
+    "BSD8-Annexure!I39",
+    "BSD8.Annexure.R39.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K39 follows the template formula =I39+J39"
+  },
+  {
+   "id": "BSD8-ARI-0096",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I40",
+   "terms": [
+    "BSD8.Annexure.R40.capital",
+    "BSD8.Annexure.R40.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I40 follows the template formula =G40+H40"
+  },
+  {
+   "id": "BSD8-ARI-0097",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K40",
+   "terms": [
+    "BSD8-Annexure!I40",
+    "BSD8.Annexure.R40.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K40 follows the template formula =I40+J40"
+  },
+  {
+   "id": "BSD8-ARI-0098",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I41",
+   "terms": [
+    "BSD8.Annexure.R41.capital",
+    "BSD8.Annexure.R41.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I41 follows the template formula =G41+H41"
+  },
+  {
+   "id": "BSD8-ARI-0099",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K41",
+   "terms": [
+    "BSD8-Annexure!I41",
+    "BSD8.Annexure.R41.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K41 follows the template formula =I41+J41"
+  },
+  {
+   "id": "BSD8-ARI-0100",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I42",
+   "terms": [
+    "BSD8.Annexure.R42.capital",
+    "BSD8.Annexure.R42.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I42 follows the template formula =G42+H42"
+  },
+  {
+   "id": "BSD8-ARI-0101",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K42",
+   "terms": [
+    "BSD8-Annexure!I42",
+    "BSD8.Annexure.R42.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K42 follows the template formula =I42+J42"
+  },
+  {
+   "id": "BSD8-ARI-0102",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I43",
+   "terms": [
+    "BSD8.Annexure.R43.capital",
+    "BSD8.Annexure.R43.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I43 follows the template formula =G43+H43"
+  },
+  {
+   "id": "BSD8-ARI-0103",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K43",
+   "terms": [
+    "BSD8-Annexure!I43",
+    "BSD8.Annexure.R43.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K43 follows the template formula =I43+J43"
+  },
+  {
+   "id": "BSD8-ARI-0104",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I44",
+   "terms": [
+    "BSD8.Annexure.R44.capital",
+    "BSD8.Annexure.R44.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I44 follows the template formula =G44+H44"
+  },
+  {
+   "id": "BSD8-ARI-0105",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K44",
+   "terms": [
+    "BSD8-Annexure!I44",
+    "BSD8.Annexure.R44.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K44 follows the template formula =I44+J44"
+  },
+  {
+   "id": "BSD8-ARI-0106",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I45",
+   "terms": [
+    "BSD8.Annexure.R45.capital",
+    "BSD8.Annexure.R45.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I45 follows the template formula =G45+H45"
+  },
+  {
+   "id": "BSD8-ARI-0107",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K45",
+   "terms": [
+    "BSD8-Annexure!I45",
+    "BSD8.Annexure.R45.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K45 follows the template formula =I45+J45"
+  },
+  {
+   "id": "BSD8-ARI-0108",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I46",
+   "terms": [
+    "BSD8.Annexure.R46.capital",
+    "BSD8.Annexure.R46.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I46 follows the template formula =G46+H46"
+  },
+  {
+   "id": "BSD8-ARI-0109",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K46",
+   "terms": [
+    "BSD8-Annexure!I46",
+    "BSD8.Annexure.R46.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K46 follows the template formula =I46+J46"
+  },
+  {
+   "id": "BSD8-ARI-0110",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I47",
+   "terms": [
+    "BSD8.Annexure.R47.capital",
+    "BSD8.Annexure.R47.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I47 follows the template formula =G47+H47"
+  },
+  {
+   "id": "BSD8-ARI-0111",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K47",
+   "terms": [
+    "BSD8-Annexure!I47",
+    "BSD8.Annexure.R47.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K47 follows the template formula =I47+J47"
+  },
+  {
+   "id": "BSD8-ARI-0112",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I48",
+   "terms": [
+    "BSD8.Annexure.R48.capital",
+    "BSD8.Annexure.R48.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I48 follows the template formula =G48+H48"
+  },
+  {
+   "id": "BSD8-ARI-0113",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K48",
+   "terms": [
+    "BSD8-Annexure!I48",
+    "BSD8.Annexure.R48.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K48 follows the template formula =I48+J48"
+  },
+  {
+   "id": "BSD8-ARI-0114",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I49",
+   "terms": [
+    "BSD8.Annexure.R49.capital",
+    "BSD8.Annexure.R49.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I49 follows the template formula =G49+H49"
+  },
+  {
+   "id": "BSD8-ARI-0115",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K49",
+   "terms": [
+    "BSD8-Annexure!I49",
+    "BSD8.Annexure.R49.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K49 follows the template formula =I49+J49"
+  },
+  {
+   "id": "BSD8-ARI-0116",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I50",
+   "terms": [
+    "BSD8.Annexure.R50.capital",
+    "BSD8.Annexure.R50.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I50 follows the template formula =G50+H50"
+  },
+  {
+   "id": "BSD8-ARI-0117",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K50",
+   "terms": [
+    "BSD8-Annexure!I50",
+    "BSD8.Annexure.R50.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K50 follows the template formula =I50+J50"
+  },
+  {
+   "id": "BSD8-ARI-0118",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I51",
+   "terms": [
+    "BSD8.Annexure.R51.capital",
+    "BSD8.Annexure.R51.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I51 follows the template formula =G51+H51"
+  },
+  {
+   "id": "BSD8-ARI-0119",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K51",
+   "terms": [
+    "BSD8-Annexure!I51",
+    "BSD8.Annexure.R51.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K51 follows the template formula =I51+J51"
+  },
+  {
+   "id": "BSD8-ARI-0120",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I52",
+   "terms": [
+    "BSD8.Annexure.R52.capital",
+    "BSD8.Annexure.R52.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I52 follows the template formula =G52+H52"
+  },
+  {
+   "id": "BSD8-ARI-0121",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K52",
+   "terms": [
+    "BSD8-Annexure!I52",
+    "BSD8.Annexure.R52.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K52 follows the template formula =I52+J52"
+  },
+  {
+   "id": "BSD8-ARI-0122",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I53",
+   "terms": [
+    "BSD8.Annexure.R53.capital",
+    "BSD8.Annexure.R53.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I53 follows the template formula =G53+H53"
+  },
+  {
+   "id": "BSD8-ARI-0123",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K53",
+   "terms": [
+    "BSD8-Annexure!I53",
+    "BSD8.Annexure.R53.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K53 follows the template formula =I53+J53"
+  },
+  {
+   "id": "BSD8-ARI-0124",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I54",
+   "terms": [
+    "BSD8.Annexure.R54.capital",
+    "BSD8.Annexure.R54.interest"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!I54 follows the template formula =G54+H54"
+  },
+  {
+   "id": "BSD8-ARI-0125",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K54",
+   "terms": [
+    "BSD8-Annexure!I54",
+    "BSD8.Annexure.R54.obs"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K54 follows the template formula =I54+J54"
+  },
+  {
+   "id": "BSD8-ARI-0126",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!G55",
+   "terms": [
+    "BSD8.Annexure.R5.capital",
+    "BSD8.Annexure.R6.capital",
+    "BSD8.Annexure.R7.capital",
+    "BSD8.Annexure.R8.capital",
+    "BSD8.Annexure.R9.capital",
+    "BSD8.Annexure.R10.capital",
+    "BSD8.Annexure.R11.capital",
+    "BSD8.Annexure.R12.capital",
+    "BSD8.Annexure.R13.capital",
+    "BSD8.Annexure.R14.capital",
+    "BSD8.Annexure.R15.capital",
+    "BSD8.Annexure.R16.capital",
+    "BSD8.Annexure.R17.capital",
+    "BSD8.Annexure.R18.capital",
+    "BSD8.Annexure.R19.capital",
+    "BSD8.Annexure.R20.capital",
+    "BSD8.Annexure.R21.capital",
+    "BSD8.Annexure.R22.capital",
+    "BSD8.Annexure.R23.capital",
+    "BSD8.Annexure.R24.capital",
+    "BSD8.Annexure.R25.capital",
+    "BSD8.Annexure.R26.capital",
+    "BSD8.Annexure.R27.capital",
+    "BSD8.Annexure.R28.capital",
+    "BSD8.Annexure.R29.capital",
+    "BSD8.Annexure.R30.capital",
+    "BSD8.Annexure.R31.capital",
+    "BSD8.Annexure.R32.capital",
+    "BSD8.Annexure.R33.capital",
+    "BSD8.Annexure.R34.capital",
+    "BSD8.Annexure.R35.capital",
+    "BSD8.Annexure.R36.capital",
+    "BSD8.Annexure.R37.capital",
+    "BSD8.Annexure.R38.capital",
+    "BSD8.Annexure.R39.capital",
+    "BSD8.Annexure.R40.capital",
+    "BSD8.Annexure.R41.capital",
+    "BSD8.Annexure.R42.capital",
+    "BSD8.Annexure.R43.capital",
+    "BSD8.Annexure.R44.capital",
+    "BSD8.Annexure.R45.capital",
+    "BSD8.Annexure.R46.capital",
+    "BSD8.Annexure.R47.capital",
+    "BSD8.Annexure.R48.capital",
+    "BSD8.Annexure.R49.capital",
+    "BSD8.Annexure.R50.capital",
+    "BSD8.Annexure.R51.capital",
+    "BSD8.Annexure.R52.capital",
+    "BSD8.Annexure.R53.capital",
+    "BSD8.Annexure.R54.capital"
+   ],
+   "tolerance": "0.255",
+   "description": "BSD8-Annexure!G55 follows the template formula =SUM(G5:G54)"
+  },
+  {
+   "id": "BSD8-ARI-0127",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!H55",
+   "terms": [
+    "BSD8.Annexure.R5.interest",
+    "BSD8.Annexure.R6.interest",
+    "BSD8.Annexure.R7.interest",
+    "BSD8.Annexure.R8.interest",
+    "BSD8.Annexure.R9.interest",
+    "BSD8.Annexure.R10.interest",
+    "BSD8.Annexure.R11.interest",
+    "BSD8.Annexure.R12.interest",
+    "BSD8.Annexure.R13.interest",
+    "BSD8.Annexure.R14.interest",
+    "BSD8.Annexure.R15.interest",
+    "BSD8.Annexure.R16.interest",
+    "BSD8.Annexure.R17.interest",
+    "BSD8.Annexure.R18.interest",
+    "BSD8.Annexure.R19.interest",
+    "BSD8.Annexure.R20.interest",
+    "BSD8.Annexure.R21.interest",
+    "BSD8.Annexure.R22.interest",
+    "BSD8.Annexure.R23.interest",
+    "BSD8.Annexure.R24.interest",
+    "BSD8.Annexure.R25.interest",
+    "BSD8.Annexure.R26.interest",
+    "BSD8.Annexure.R27.interest",
+    "BSD8.Annexure.R28.interest",
+    "BSD8.Annexure.R29.interest",
+    "BSD8.Annexure.R30.interest",
+    "BSD8.Annexure.R31.interest",
+    "BSD8.Annexure.R32.interest",
+    "BSD8.Annexure.R33.interest",
+    "BSD8.Annexure.R34.interest",
+    "BSD8.Annexure.R35.interest",
+    "BSD8.Annexure.R36.interest",
+    "BSD8.Annexure.R37.interest",
+    "BSD8.Annexure.R38.interest",
+    "BSD8.Annexure.R39.interest",
+    "BSD8.Annexure.R40.interest",
+    "BSD8.Annexure.R41.interest",
+    "BSD8.Annexure.R42.interest",
+    "BSD8.Annexure.R43.interest",
+    "BSD8.Annexure.R44.interest",
+    "BSD8.Annexure.R45.interest",
+    "BSD8.Annexure.R46.interest",
+    "BSD8.Annexure.R47.interest",
+    "BSD8.Annexure.R48.interest",
+    "BSD8.Annexure.R49.interest",
+    "BSD8.Annexure.R50.interest",
+    "BSD8.Annexure.R51.interest",
+    "BSD8.Annexure.R52.interest",
+    "BSD8.Annexure.R53.interest",
+    "BSD8.Annexure.R54.interest"
+   ],
+   "tolerance": "0.255",
+   "description": "BSD8-Annexure!H55 follows the template formula =SUM(H5:H54)"
+  },
+  {
+   "id": "BSD8-ARI-0128",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!I55",
+   "terms": [
+    "BSD8-Annexure!I5",
+    "BSD8-Annexure!I6",
+    "BSD8-Annexure!I7",
+    "BSD8-Annexure!I8",
+    "BSD8-Annexure!I9",
+    "BSD8-Annexure!I10",
+    "BSD8-Annexure!I11",
+    "BSD8-Annexure!I12",
+    "BSD8-Annexure!I13",
+    "BSD8-Annexure!I14",
+    "BSD8-Annexure!I15",
+    "BSD8-Annexure!I16",
+    "BSD8-Annexure!I17",
+    "BSD8-Annexure!I18",
+    "BSD8-Annexure!I19",
+    "BSD8-Annexure!I20",
+    "BSD8-Annexure!I21",
+    "BSD8-Annexure!I22",
+    "BSD8-Annexure!I23",
+    "BSD8-Annexure!I24",
+    "BSD8-Annexure!I25",
+    "BSD8-Annexure!I26",
+    "BSD8-Annexure!I27",
+    "BSD8-Annexure!I28",
+    "BSD8-Annexure!I29",
+    "BSD8-Annexure!I30",
+    "BSD8-Annexure!I31",
+    "BSD8-Annexure!I32",
+    "BSD8-Annexure!I33",
+    "BSD8-Annexure!I34",
+    "BSD8-Annexure!I35",
+    "BSD8-Annexure!I36",
+    "BSD8-Annexure!I37",
+    "BSD8-Annexure!I38",
+    "BSD8-Annexure!I39",
+    "BSD8-Annexure!I40",
+    "BSD8-Annexure!I41",
+    "BSD8-Annexure!I42",
+    "BSD8-Annexure!I43",
+    "BSD8-Annexure!I44",
+    "BSD8-Annexure!I45",
+    "BSD8-Annexure!I46",
+    "BSD8-Annexure!I47",
+    "BSD8-Annexure!I48",
+    "BSD8-Annexure!I49",
+    "BSD8-Annexure!I50",
+    "BSD8-Annexure!I51",
+    "BSD8-Annexure!I52",
+    "BSD8-Annexure!I53",
+    "BSD8-Annexure!I54"
+   ],
+   "tolerance": "0.255",
+   "description": "BSD8-Annexure!I55 follows the template formula =SUM(I5:I54)"
+  },
+  {
+   "id": "BSD8-ARI-0129",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!J55",
+   "terms": [
+    "BSD8.Annexure.R5.obs",
+    "BSD8.Annexure.R6.obs",
+    "BSD8.Annexure.R7.obs",
+    "BSD8.Annexure.R8.obs",
+    "BSD8.Annexure.R9.obs",
+    "BSD8.Annexure.R10.obs",
+    "BSD8.Annexure.R11.obs",
+    "BSD8.Annexure.R12.obs",
+    "BSD8.Annexure.R13.obs",
+    "BSD8.Annexure.R14.obs",
+    "BSD8.Annexure.R15.obs",
+    "BSD8.Annexure.R16.obs",
+    "BSD8.Annexure.R17.obs",
+    "BSD8.Annexure.R18.obs",
+    "BSD8.Annexure.R19.obs",
+    "BSD8.Annexure.R20.obs",
+    "BSD8.Annexure.R21.obs",
+    "BSD8.Annexure.R22.obs",
+    "BSD8.Annexure.R23.obs",
+    "BSD8.Annexure.R24.obs",
+    "BSD8.Annexure.R25.obs",
+    "BSD8.Annexure.R26.obs",
+    "BSD8.Annexure.R27.obs",
+    "BSD8.Annexure.R28.obs",
+    "BSD8.Annexure.R29.obs",
+    "BSD8.Annexure.R30.obs",
+    "BSD8.Annexure.R31.obs",
+    "BSD8.Annexure.R32.obs",
+    "BSD8.Annexure.R33.obs",
+    "BSD8.Annexure.R34.obs",
+    "BSD8.Annexure.R35.obs",
+    "BSD8.Annexure.R36.obs",
+    "BSD8.Annexure.R37.obs",
+    "BSD8.Annexure.R38.obs",
+    "BSD8.Annexure.R39.obs",
+    "BSD8.Annexure.R40.obs",
+    "BSD8.Annexure.R41.obs",
+    "BSD8.Annexure.R42.obs",
+    "BSD8.Annexure.R43.obs",
+    "BSD8.Annexure.R44.obs",
+    "BSD8.Annexure.R45.obs",
+    "BSD8.Annexure.R46.obs",
+    "BSD8.Annexure.R47.obs",
+    "BSD8.Annexure.R48.obs",
+    "BSD8.Annexure.R49.obs",
+    "BSD8.Annexure.R50.obs",
+    "BSD8.Annexure.R51.obs",
+    "BSD8.Annexure.R52.obs",
+    "BSD8.Annexure.R53.obs",
+    "BSD8.Annexure.R54.obs"
+   ],
+   "tolerance": "0.255",
+   "description": "BSD8-Annexure!J55 follows the template formula =SUM(J5:J54)"
+  },
+  {
+   "id": "BSD8-ARI-0130",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD8-Annexure!K55",
+   "terms": [
+    "BSD8-Annexure!I55",
+    "BSD8-Annexure!J55"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD8-Annexure!K55 follows the template formula =I55+J55"
+  }
+ ]
+}

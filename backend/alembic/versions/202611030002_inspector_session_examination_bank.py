@@ -21,6 +21,7 @@ claim is a refusal, not an organization-wide fallback.
 import sqlalchemy as sa
 
 from alembic import op
+from app.db.session import force_rls_suspended
 
 revision = "202611030002"
 down_revision = "202611030001"
@@ -33,14 +34,17 @@ def upgrade() -> None:
         "operator_inspector_sessions",
         sa.Column("bank_id", sa.String(length=16), nullable=True),
     )
-    op.create_foreign_key(
-        "fk_operator_inspector_sessions_bank_id",
-        "operator_inspector_sessions",
-        "banks",
-        ["bank_id"],
-        ["id"],
-        ondelete="CASCADE",
-    )
+    # Adding a foreign key validates existing rows with a query that forced RLS
+    # would filter (or refuse under row_security=off), so validate as the owner.
+    with force_rls_suspended(op.get_bind(), "operator_inspector_sessions", "banks"):
+        op.create_foreign_key(
+            "fk_operator_inspector_sessions_bank_id",
+            "operator_inspector_sessions",
+            "banks",
+            ["bank_id"],
+            ["id"],
+            ondelete="CASCADE",
+        )
 
 
 def downgrade() -> None:

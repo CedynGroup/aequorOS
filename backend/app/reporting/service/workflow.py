@@ -20,9 +20,9 @@ after the subsequent ORASS re-upload — the one narrow case where
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, cast
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -30,10 +30,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.return_family_access import FamilyGate, gate_for
 from app.identity import public as institution_profile
-from app.identity.public import get_bank_or_404
-from app.notifications.public import notifications
+from app.identity.public import Bank, get_bank_or_404
 from app.reporting.models.packages import (
     RegulatoryPackage,
     RegulatoryPackageApproval,
@@ -58,7 +56,12 @@ from app.reporting.service import (
     artifact_versions,
     family_access,
     family_hooks,
+    filing_notifications,
     filing_reconciliation,
+    gateway_documents,
+    gateway_queries,
+    reporting_settings,
+    submission_sync,
 )
 from app.reporting.service.channel_config import (
     channel_config_row,
@@ -72,8 +75,10 @@ from app.reporting.service.channels import (
     FiledArtifact,
     OrassApiChannel,
     OrassSandboxChannel,
+    ReportingGatewayChannel,
     build_email_bundle,
 )
+from app.reporting.service.channels.base import SubmissionPollStatus
 from app.reporting.service.common import (
     get_package_or_404,
     read_package,
@@ -84,6 +89,7 @@ from app.reporting.service.filing_retention import (
     retain_filing,
 )
 from app.reporting.service.registry import ReturnDefinition, get_definition
+from app.reporting.service.reporting_gateway_connection import gateway_channel_for_submission
 from app.services.audit import record_event
 
 # §2 lifecycle. "generated" is re-entered on approval rejection (rework) and
@@ -147,18 +153,30 @@ UNFILABLE_WORKING_ARTIFACT_KINDS: Final[frozenset[str]] = (
 #: axis, and it is deny-by-default in the same way: a filable kind whose
 #: generator is not listed here is not filed.
 #:
-#: The founder's decision named one thing — *"BoG appear to prefer Excel with
-#: formulas"* — and the workbook it named is the official Bank of Ghana form,
-#: produced by ``bog_form`` from BoG's own committed template by evaluating the
-#: template's own formulas. An SDI packet's working copy is an AequorOS
-#: calculation sheet, not a regulator's workbook; filing it would be inferring
-#: a second regulator's preference from a decision that stated one. So it stays
-#: internal, and its "not a filing artifact" label stays true.
-#: A kind with no entry here reaches nobody: adding a kind to
+#: Founder decision 2026-11-23, superseding 2026-09-20's official-forms-only
+#: rule: the regulator receives the Excel WITH formulas for every return that
+#: has one, not a values-only copy. That covers the official BoG forms
+#: (``bog_form``, BoG's own template and formulas) and the returns whose
+#: formula workbook AequorOS builds over the sealed figures (NPL and the SDI
+#: packets). The formula workbook is still never the SIGNED record: officers
+#: sign fixed values, and a workbook that recalculates can show other numbers.
+#: ``icaap_report`` is absent because its working copy is the Word draft, a kind
+#: that never files. A kind with no entry here reaches nobody: adding a kind to
 #: ``FILABLE_WORKING_ARTIFACT_KINDS`` is not enough, the generators that may
 #: file it have to be named too.
 WORKING_ARTIFACT_FILING_GENERATORS: Final[dict[str, frozenset[str]]] = {
-    "xlsx_working": frozenset({"bog_form"}),
+    "xlsx_working": frozenset(
+        {
+            "bog_form",
+            "capital",
+            "fx",
+            "npl_monthly",
+            "sdi_irrbb",
+            "sdi_large_exposures",
+            "sdi_lmt",
+            "sdi_stress_annual",
+        }
+    ),
 }
 
 
@@ -175,6 +193,27 @@ def filing_admits_artifact(kind: str, *, generator: str | None) -> bool:
         return False
     return generator is not None and generator in WORKING_ARTIFACT_FILING_GENERATORS.get(
         kind, frozenset()
+    )
+
+
+def package_files_artifact(package: RegulatoryPackage, kind: str, *, generator: str | None) -> bool:
+    """:func:`filing_admits_artifact` for one package, honouring when it was generated.
+
+    An AequorOS calculation workbook states on its face whether it is filed
+    (``exports.xlsx``, chosen by ``metadata.formula_workbook``). A package
+    generated before 2026-11-23 carries no stamp, so its workbook still says it is
+    not a filing artifact: that package files values only, exactly as it did, and
+    regenerating it brings the formula workbook. The official forms' workbook was
+    filable before the stamp existed and needs none.
+    """
+    if not filing_admits_artifact(kind, generator=generator):
+        return False
+    if kind not in WORKING_ARTIFACT_KINDS or generator == "bog_form":
+        return True
+    metadata: object = (package.snapshot or {}).get("metadata")
+    return (
+        isinstance(metadata, dict)
+        and cast(dict[str, object], metadata).get("formula_workbook") == "filed"
     )
 
 
@@ -309,69 +348,10 @@ def request_approval(
     _add_approval(
         db, ctx, package, action="requested", actor_user_id=actor_user_id, reason=payload.reason
     )
-    notifications.emit(
-        db,
-        ctx,
-        type="reporting.package.pending_approval",
-        severity="warning",
-        title=f"{package.return_code} {package.reporting_date.isoformat()} awaits approval",
-        body=(
-            f"Version {package.version} of {package.return_code} for "
-            f"{package.reporting_date.isoformat()} is pending an approval decision."
-            + (f" Requester note: {payload.reason}" if payload.reason else "")
-        ),
-        entity_type="regulatory_package",
-        entity_id=package.id,
-        recipient_role="approver",
-        bank_id=package.bank_id,
-        # The family factor admits regulatory-package rows by the package's own
-        # family read gate, so the locator is that gate: an ICAAP preparer's
-        # decision notices are Capital/confidential material, and a
-        # REGULATORY-located row would hide them from exactly the preparer the
-        # factor admits.
-        module=_locator_gate(package).module,
-        sensitivity=_locator_gate(package).sensitivity,
-    )
+    # The chain notifies everyone who may decide the next stage
+    # (``filing_notifications.stage_entered``), by authority rather than role.
     db.commit()
     return read_package(db, package)
-
-
-def _notify_decision(
-    db: Session,
-    ctx: TenantContext,
-    package: RegulatoryPackage,
-    *,
-    approved: bool,
-    reason: str | None,
-) -> None:
-    """Tell the maker what the checker decided (no commit).
-
-    Addressed to ``generated_by`` rather than to a role: an approval decision is
-    an answer to one officer's request, and the person who has to act on a
-    rework is the one who prepared it.
-    """
-    notifications.emit(
-        db,
-        ctx,
-        type="reporting.package.approved" if approved else "reporting.package.approval_rejected",
-        severity="info" if approved else "warning",
-        title=(
-            f"{package.return_code} {package.reporting_date.isoformat()} "
-            + ("approved" if approved else "returned for rework")
-        ),
-        body=(
-            f"Version {package.version} of {package.return_code} for "
-            f"{package.reporting_date.isoformat()} was "
-            + ("approved for submission." if approved else "rejected at approval.")
-            + (f" Reason: {reason}" if reason else "")
-        ),
-        entity_type="regulatory_package",
-        entity_id=package.id,
-        recipient_user_id=package.generated_by,
-        bank_id=package.bank_id,
-        module=_locator_gate(package).module,
-        sensitivity=_locator_gate(package).sensitivity,
-    )
 
 
 def ensure_decidable(package: RegulatoryPackage, actor_user_id: UUID) -> None:
@@ -473,7 +453,6 @@ def record_certification_approval(
         actor_user_id=actor_user_id,
         reason=reason,
     )
-    _notify_decision(db, ctx, package, approved=True, reason=reason)
     filing_chain.record_stage_approval(db, ctx, package, actor=actor_user_id, comment=reason)
     filing_chain.apply_projection(db, ctx, filing_chain.load_state(db, ctx, package))
     return approval
@@ -508,7 +487,6 @@ def decide_approval(
         reason=payload.reason,
     )
     approved = payload.action == "approved"
-    _notify_decision(db, ctx, package, approved=approved, reason=payload.reason)
     # The chain decides where the return goes; the status is its projection.
     # This route is the COMPATIBILITY surface: it decides the stage the return
     # is actually waiting at, on the state as the server holds it. The chain
@@ -574,7 +552,6 @@ def send_back_for_corrections(
     approval = _add_approval(
         db, ctx, package, action="rejected", actor_user_id=actor_user_id, reason=reason
     )
-    _notify_decision(db, ctx, package, approved=False, reason=reason)
     _decide_on_chain(db, ctx, package, approved=False, reason=reason)
     return approval
 
@@ -614,6 +591,14 @@ def add_submission_event(  # noqa: PLR0913
             "external_ref": external_ref,
         },
     )
+    if event == "submitted":
+        # The one place every submission is recorded (channel, manual, email
+        # fallback, re-upload), so the filing notice and the regulator status
+        # sync cannot be forgotten by a future filing path.
+        filing_notifications.submission_recorded(
+            db, ctx, package, channel=channel, reference=external_ref, detail=detail
+        )
+        submission_sync.schedule_after_submission(db, package, channel=channel)
     return row
 
 
@@ -681,6 +666,24 @@ def record_regulator_decision(  # noqa: PLR0913
     require_actor(ctx)
     get_bank_or_404(db, ctx, bank_id)
     package = get_package_or_404(db, ctx, bank_id, package_id)
+    _apply_regulator_decision(
+        db, ctx, package, channel=channel, event=event, external_ref=external_ref, detail=detail
+    )
+    db.commit()
+    return read_package(db, package)
+
+
+def _apply_regulator_decision(  # noqa: PLR0913
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    *,
+    channel: str,
+    event: str,
+    external_ref: str | None,
+    detail: dict[str, Any] | None,
+) -> None:
+    """Move the package to the regulator's outcome, record it, notify (no commit)."""
     transition(db, ctx, package, event, details={"channel": channel})
     if event in ("rejected", "declined"):
         comments = (detail or {}).get("comments") or (detail or {}).get("message")
@@ -695,85 +698,9 @@ def record_regulator_decision(  # noqa: PLR0913
         external_ref=external_ref,
         detail=detail,
     )
-    _notify_regulator_decision(db, ctx, package, event=event, detail=detail)
-    db.commit()
-    return read_package(db, package)
-
-
-_REGULATOR_DECISION_SEVERITIES = {
-    "acknowledged": "info",
-    "rejected": "warning",
-    "declined": "critical",
-}
-_REGULATOR_DECISION_LABELS = {
-    "acknowledged": "acknowledged",
-    "rejected": "rejected (returned for correction)",
-    "declined": "declined (final refusal)",
-}
-_COMMENT_SNIPPET_CHARS = 300
-
-
-def _locator_gate(package: RegulatoryPackage) -> FamilyGate:
-    """The read gate the package's own family is admitted by (#186).
-
-    The family visibility factor admits regulatory-package notifications by
-    the package's family, so the locator is that same gate: an ICAAP
-    preparer's decision notices are Capital/confidential material, and a
-    REGULATORY-located row would hide them from exactly the preparer the
-    factor admits. Every actor the filing chain reaches has already passed
-    this gate's view check, so no intended recipient loses a notice.
-    """
-    return gate_for(package.return_family)
-
-
-def _notify_regulator_decision(
-    db: Session,
-    ctx: TenantContext,
-    package: RegulatoryPackage,
-    *,
-    event: str,
-    detail: dict[str, Any] | None,
-) -> None:
-    """Notify approver-class users AND the package generator (no commit).
-
-    The generator gets a direct row only when the approver fan-out did not
-    already reach them (an approver who generated the package gets one row).
-    """
-    label = _REGULATOR_DECISION_LABELS[event]
-    body = (
-        f"The regulator {label} {package.return_code} for "
-        f"{package.reporting_date.isoformat()} (version {package.version})."
+    filing_notifications.regulator_decided(
+        db, ctx, package, event=event, reference=external_ref, detail=detail
     )
-    comments = (detail or {}).get("comments") or (detail or {}).get("message")
-    if comments:
-        body += f" Supervisor comments: {str(comments)[:_COMMENT_SNIPPET_CHARS]}"
-    envelope: dict[str, Any] = {
-        "type": f"reporting.regulator.{event}",
-        "severity": _REGULATOR_DECISION_SEVERITIES[event],
-        "title": f"{package.return_code} {package.reporting_date.isoformat()} {label}",
-        "body": body,
-        "entity_type": "regulatory_package",
-        "entity_id": package.id,
-    }
-    rows = notifications.emit(
-        db,
-        ctx,
-        **envelope,
-        recipient_role="approver",
-        bank_id=package.bank_id,
-        module=_locator_gate(package).module,
-        sensitivity=_locator_gate(package).sensitivity,
-    )
-    if all(row.recipient_user_id != package.generated_by for row in rows):
-        notifications.emit(
-            db,
-            ctx,
-            **envelope,
-            recipient_user_id=package.generated_by,
-            bank_id=package.bank_id,
-            module=_locator_gate(package).module,
-            sensitivity=_locator_gate(package).sensitivity,
-        )
 
 
 def list_submission_events(  # noqa: PLR0913
@@ -911,7 +838,7 @@ def _filing_set(
         # in AND this return's generator is named for that kind — the official
         # BoG forms, and nothing else. The Word ICAAP draft and every SDI
         # working sheet stay internal.
-        if filing_admits_artifact(artifact.kind, generator=generator)
+        if package_files_artifact(package, artifact.kind, generator=generator)
         and (signed is None or artifact.kind != signed.version.kind)
     ]
     detail: dict[str, Any] = {}
@@ -955,7 +882,7 @@ def _filing_set(
         for kind in wanted:
             if kind in {artifact.kind for artifact in filed}:
                 continue
-            if not filing_admits_artifact(kind, generator=generator):
+            if not package_files_artifact(package, kind, generator=generator):
                 continue
             if kind in WORKING_ARTIFACT_KINDS and not _produces_working_copy(definition):
                 # No formula workbook exists for this return — BoG publishes no
@@ -1079,7 +1006,9 @@ def has_pending_orass_reupload(db: Session, package: RegulatoryPackage) -> bool:
     return bool(latest.detail.get("pending_orass_reupload"))
 
 
-type _ChannelPlugin = OrassApiChannel | OrassSandboxChannel | EmailFallbackChannel
+type _ChannelPlugin = (
+    OrassApiChannel | OrassSandboxChannel | EmailFallbackChannel | ReportingGatewayChannel
+)
 
 
 def _build_channel(
@@ -1094,6 +1023,10 @@ def _build_channel(
         return OrassApiChannel(config=config, credentials=credentials, prior_events=prior_events)
     if channel_code == "orass_sandbox":
         return OrassSandboxChannel(config=config, prior_events=prior_events)
+    if channel_code == "reporting_gateway":
+        return ReportingGatewayChannel(
+            config=config, credentials=credentials, prior_events=prior_events
+        )
     if channel_code == "email":
         return EmailFallbackChannel(
             config=config,
@@ -1103,6 +1036,31 @@ def _build_channel(
     raise HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail=f"Channel '{channel_code}' has no automated submission plugin.",
+    )
+
+
+def _submission_channel(  # noqa: PLR0913 - the channel needs the whole filing context
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    package: RegulatoryPackage,
+    channel_code: str,
+    config: dict[str, Any],
+    credentials: dict[str, Any] | None,
+    prior_events: list[RegulatorySubmissionEvent],
+) -> _ChannelPlugin:
+    if channel_code == "reporting_gateway":
+        # The gateway filing carries the package's declaration (preparer and
+        # approver roles) and, for a correction, the receipt it supersedes.
+        return gateway_channel_for_submission(
+            db, bank, package, config=config, credentials=credentials
+        )
+    return _build_channel(
+        channel_code,
+        config=config,
+        credentials=credentials,
+        prior_events=prior_events,
+        institution_code_fallback=institution_profile.orass_institution_code(db, ctx, bank.id),
     )
 
 
@@ -1117,16 +1075,47 @@ def _load_channel_context(
     receives none (it transmits nothing); the API channel authenticates
     with them.
     """
+    # What every channel shares comes from the filing profile; a value the
+    # channel's own config sets wins.
+    _default, shared = reporting_settings.filing_defaults(db, ctx, bank_id)
     row = channel_config_row(db, ctx, bank_id, channel_code)
     if row is None:
-        return {}, None
+        return shared, None
     credentials: dict[str, Any] | None = None
-    if channel_code in ("orass_api", "orass_sandbox") and row.credential_ciphertext is not None:
+    if (
+        channel_code in ("orass_api", "orass_sandbox", "reporting_gateway")
+        and row.credential_ciphertext is not None
+    ):
         credentials = decrypt_channel_credentials(row)
     if channel_code == "orass_sandbox":
         del credentials  # the simulator must never hold credential material
         credentials = None
-    return dict(row.config), credentials
+    return {**shared, **dict(row.config)}, credentials
+
+
+def filing_channel(
+    db: Session, ctx: TenantContext, bank_id: str, definition: ReturnDefinition | None
+) -> str:
+    """The channel a submission of this return resolves to (bank default, registry)."""
+    return _resolved_channel(db, ctx, bank_id, definition)
+
+
+def _resolved_channel(
+    db: Session, ctx: TenantContext, bank_id: str, definition: ReturnDefinition | None
+) -> str:
+    registry_default = definition.default_channel if definition is not None else "manual"
+    bank_default, _shared = reporting_settings.filing_defaults(db, ctx, bank_id)
+    return reporting_settings.effective_channel(
+        registry_default,
+        bank_default,
+        return_code=definition.code if definition is not None else None,
+        allowed=definition.allowed_channels if definition is not None else None,
+    )
+
+
+def resolved_channel(db: Session, ctx: TenantContext, package: RegulatoryPackage) -> str:
+    """The channel submitting ``package`` would use, resolved as the submission does."""
+    return _resolved_channel(db, ctx, package.bank_id, get_definition(package.return_code))
 
 
 def _ensure_attested(db: Session, ctx: TenantContext, package: RegulatoryPackage) -> None:
@@ -1246,6 +1235,31 @@ def _resolve_external_ref(
     return value
 
 
+def _carry_gateway_documents(  # noqa: PLR0913 - the filing and where its record goes
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    channel: ReportingGatewayChannel,
+    artifacts: Sequence[FiledArtifact],
+    filing_detail: dict[str, Any],
+) -> None:
+    """Hand the gateway its documents, and make the filing record name exactly those.
+
+    The gateway carries the formula workbook in place of the values-only copy
+    (``gateway_documents.filed_documents``), so the record of what went is narrowed to
+    what went.
+    """
+    documents = gateway_documents.filed_documents(db, ctx, package, artifacts)
+    channel.carry_documents(
+        [(document.name, document.media_type, document.content) for document in documents]
+    )
+    sent = {document.object_path for document in documents}
+    recorded = cast(list[dict[str, Any]], filing_detail.get("filed_artifacts", []))
+    filing_detail["filed_artifacts"] = [
+        entry for entry in recorded if entry.get("object_path") in sent
+    ]
+
+
 def submit_package_via_channel(  # noqa: PLR0913 - the submission key is its named parts
     db: Session,
     ctx: TenantContext,
@@ -1257,7 +1271,8 @@ def submit_package_via_channel(  # noqa: PLR0913 - the submission key is its nam
 ) -> RegulatoryPackageRead:
     """Resolve the channel, deliver the package, and record the outcome.
 
-    - Channel: explicit override, else the registry default for the return.
+    - Channel: explicit override, else the bank's default channel for returns
+      the regulator receives electronically, else the registry default.
     - Preconditions: approved package (or the guarded email->ORASS re-upload);
       when no artifact exists yet, an xlsx export is minted first through the
       lazy exporter seam — the operator's main path.
@@ -1268,9 +1283,7 @@ def submit_package_via_channel(  # noqa: PLR0913 - the submission key is its nam
     bank = get_bank_or_404(db, ctx, bank_id)
     package = get_package_or_404(db, ctx, bank_id, package_id)
     definition = get_definition(package.return_code)
-    channel_code = channel_override or (
-        definition.default_channel if definition is not None else "manual"
-    )
+    channel_code = channel_override or _resolved_channel(db, ctx, bank.id, definition)
 
     is_reupload, prior_email_ref = _ensure_channel_submittable(db, package, channel_code)
     external_ref = _resolve_external_ref(definition, channel_code, external_ref=external_ref)
@@ -1310,14 +1323,12 @@ def submit_package_via_channel(  # noqa: PLR0913 - the submission key is its nam
     # ORASS-style references are form-set sequences; inject the per-(bank,
     # return) submission sequence so the sandbox mints deterministic refs.
     config["_submission_sequence"] = _next_submission_sequence(db, ctx, bank.id, package)
-    channel = _build_channel(
-        channel_code,
-        config=config,
-        credentials=credentials,
-        prior_events=prior_events,
-        institution_code_fallback=institution_profile.orass_institution_code(db, ctx, bank.id),
+    channel = _submission_channel(
+        db, ctx, bank, package, channel_code, config, credentials, prior_events
     )
     try:
+        if isinstance(channel, ReportingGatewayChannel):
+            _carry_gateway_documents(db, ctx, package, channel, artifacts, filing_detail)
         external_ref = channel.submit(package, artifacts)
     except ChannelDowntimeError as exc:
         raise HTTPException(
@@ -1374,7 +1385,48 @@ def submit_package_via_channel(  # noqa: PLR0913 - the submission key is its nam
         detail=detail,
     )
     db.commit()
+    _answer_regulator_requests(db, ctx, package, channel, external_ref)
     return read_package(db, package)
+
+
+def _answer_regulator_requests(
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    channel: _ChannelPlugin,
+    corrected_receipt: str,
+) -> None:
+    """A corrected filing answers the regulator's request for it, with its receipt.
+
+    After the filing is committed, and never at its expense: a reply that cannot be
+    sent now leaves the query open for the officer to answer by hand. Only the
+    gateway carries the regulator's requests.
+    """
+    if not isinstance(channel, ReportingGatewayChannel):
+        return
+    superseded = channel.last_detail.get("supersedes_receipt_id")
+    if not isinstance(superseded, str) or not superseded:
+        return
+    try:
+        answered = gateway_queries.answer_resubmission_requests(
+            channel, superseded, corrected_receipt
+        )
+    except ChannelError:
+        return
+    if answered:
+        record_event(
+            db,
+            ctx,
+            event_type="regulator_query.answered_by_correction",
+            entity_type="regulatory_package",
+            entity_id=package.id,
+            details={
+                "numbers": answered,
+                "superseded_receipt_id": superseded,
+                "corrected_receipt_id": corrected_receipt,
+            },
+        )
+        db.commit()
 
 
 def poll_submission(
@@ -1386,25 +1438,18 @@ def poll_submission(
     package = get_package_or_404(db, ctx, bank_id, package_id)
     if package.status != "submitted":
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Only a submitted package can be polled; this package is '{package.status}'.",
+            status_code=status.HTTP_409_CONFLICT, detail=_not_pollable_sentence(package.status)
         )
-    events = _submission_events_asc(db, package)
-    latest = _latest_submitted_event(events)
-    if latest is None or latest.external_ref is None or latest.channel == "manual":
+    try:
+        poll_status, poll_event = check_regulator_status(db, ctx, package)
+    except SubmissionNotPollable as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
                 "No pollable channel submission exists for this package; record "
                 "the regulator decision manually instead."
             ),
-        )
-    config, credentials = _load_channel_context(db, ctx, bank_id, latest.channel)
-    channel = _build_channel(
-        latest.channel, config=config, credentials=credentials, prior_events=events
-    )
-    try:
-        poll_status, poll_detail = channel.poll_with_detail(latest.external_ref)
+        ) from exc
     except ChannelDowntimeError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -1414,35 +1459,110 @@ def poll_submission(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.operator_message
         ) from exc
-    finally:
-        del credentials  # per-cycle retrieval: discard, never persist or log
-    poll_event = add_submission_event(
-        db,
-        ctx,
-        package,
-        channel=latest.channel,
-        event="status_poll",
-        external_ref=latest.external_ref,
-        detail={**poll_detail, "result": poll_status},
-    )
-    if poll_status in ("acknowledged", "rejected", "declined"):
-        record_regulator_decision(
-            db,
-            ctx,
-            bank_id,
-            package.id,
-            channel=latest.channel,
-            event=poll_status,
-            external_ref=latest.external_ref,
-            detail=poll_detail,
-        )  # commits
-    else:
-        db.commit()
+    assert poll_event is not None  # an interactive poll always records its event
+    db.commit()
     return SubmissionPollRead(
         poll_status=poll_status,
         event=SubmissionEventRead.model_validate(poll_event),
         package=read_package(db, package),
     )
+
+
+#: A recorded decision, in the words the bank's officers use for it.
+_DECIDED_AS: dict[str, str] = {
+    "acknowledged": "accepted",
+    "rejected": "sent back for correction",
+    "declined": "declined",
+}
+
+
+def _not_pollable_sentence(package_status: str) -> str:
+    """Why there is nothing to ask the regulator about, without a stored status value."""
+    decided = _DECIDED_AS.get(package_status)
+    if decided is not None:
+        return (
+            f"The regulator's decision on this return is already recorded: it was {decided}. "
+            "There is nothing further to check."
+        )
+    if package_status == "superseded":
+        return (
+            "A corrected version replaced this return. Check the status of the corrected "
+            "version instead."
+        )
+    return "This return has not been filed yet, so there is no decision to check."
+
+
+class SubmissionNotPollable(Exception):
+    """The package's latest submission went through a channel nobody can poll."""
+
+
+def check_regulator_status(
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    *,
+    record_pending: bool = True,
+) -> tuple[SubmissionPollStatus, RegulatorySubmissionEvent | None]:
+    """Ask the channel where a submitted return stands and record what it says (no commit).
+
+    Shared by the officer's "check status" button and the background
+    ``regulatory_submission_sync``; neither needs a signed-in actor here, so
+    the sync passes a tenant context without one and the audit trail records a
+    system act. A decision (accepted / sent back / declined) moves the package
+    and notifies the people who worked on it, exactly as a manual record does.
+
+    ``record_pending=False`` is the sync's mode: a poll that only says "still
+    validating" writes nothing, so a return the regulator takes days over does
+    not fill its append-only event log with identical rows.
+
+    Raises :class:`SubmissionNotPollable`, ``ChannelDowntimeError`` or
+    ``ChannelError``; the caller decides what each means to its audience.
+    """
+    events = _submission_events_asc(db, package)
+    latest = _latest_submitted_event(events)
+    if (
+        latest is None
+        or latest.external_ref is None
+        or latest.channel in _UNPOLLABLE_CHANNELS
+    ):
+        raise SubmissionNotPollable(str(package.id))
+    config, credentials = _load_channel_context(db, ctx, package.bank_id, latest.channel)
+    channel = _build_channel(
+        latest.channel, config=config, credentials=credentials, prior_events=events
+    )
+    try:
+        poll_status, poll_detail = channel.poll_with_detail(latest.external_ref)
+    finally:
+        del credentials  # per-cycle retrieval: discard, never persist or log
+    decided = poll_status in ("acknowledged", "rejected", "declined")
+    poll_event: RegulatorySubmissionEvent | None = None
+    # The sandbox simulator's only memory IS its poll log ("slow" decides on
+    # the Nth recorded poll), so its pending polls are always recorded.
+    if decided or record_pending or latest.channel == "orass_sandbox":
+        poll_event = add_submission_event(
+            db,
+            ctx,
+            package,
+            channel=latest.channel,
+            event="status_poll",
+            external_ref=latest.external_ref,
+            detail={**poll_detail, "result": poll_status},
+        )
+    if decided:
+        _apply_regulator_decision(
+            db,
+            ctx,
+            package,
+            channel=latest.channel,
+            event=poll_status,
+            external_ref=latest.external_ref,
+            detail=poll_detail,
+        )
+    return poll_status, poll_event
+
+
+#: Channels whose outcome only a person can record: nothing to ask.
+_UNPOLLABLE_CHANNELS = frozenset({"manual", "email"})
 
 
 def _next_submission_sequence(
@@ -1529,7 +1649,7 @@ def request_resubmission(
     package_id: UUID,
     payload: ResubmissionRequestCreate,
 ) -> ResubmissionRequestRead:
-    """File a resubmission request; ORASS channels decide it in-cycle.
+    """File a resubmission request; ORASS channels decide it in-cycle, the gateway by rule.
 
     A submitted/acknowledged return is immutable at the regulator; this is the
     only path to a correcting version. On grant, the next regeneration for the
@@ -1575,6 +1695,21 @@ def request_resubmission(
     )
     db.add(row)
     db.flush()
+
+    if channel_code == "reporting_gateway" and latest is not None:
+        # The gateway takes an institution's correction as an amendment that states
+        # its reason (gateway/contract/SPEC.md, Filing): there is no permission to
+        # ask for, so the channel's own rule grants it now, and this reason travels
+        # with the amendment. The supervisor reviews the amendment itself.
+        row.status = "granted"
+        row.decided_at = datetime.now(UTC)
+        row.detail = {
+            "decided_by": "channel",
+            "basis": (
+                "The AequorOS Reporting Gateway accepts a correction as an amendment "
+                "that states its reason."
+            ),
+        }
 
     if channel_code in ("orass_api", "orass_sandbox") and latest is not None:
         config, credentials = _load_channel_context(db, ctx, bank_id, channel_code)

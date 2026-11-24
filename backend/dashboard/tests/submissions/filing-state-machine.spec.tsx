@@ -98,6 +98,7 @@ function FilingControl({
     isRehearsal: false,
     pendingReupload: false,
     canPoll: true,
+    correctionGranted: false,
     regulatorName: "Test regulator",
   };
   const action = primaryFilingAction(input);

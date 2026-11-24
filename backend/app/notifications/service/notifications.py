@@ -24,9 +24,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import InstitutionScope, Module, Permission, Sensitivity
 from app.core.locator_visibility import locator_visibility
-from app.core.security import ROLES
+from app.core.security import ACCOUNT_ADMIN_ROLE, ADMIN_ROLE, ROLES
 from app.identity.public import Bank, User, load_permission_grants
+from app.notifications import catalog
 from app.notifications.models import Notification
+from app.notifications.rendering import Message
+from app.notifications.service import publishing
 from app.reporting.models.packages import RETURN_FAMILIES, RegulatoryPackage
 from app.reporting.service import family_access
 from app.reporting.service.registry import REGISTRY
@@ -55,6 +58,7 @@ def emit(  # noqa: PLR0913 - a notification carries the full display envelope
     bank_id: str | None = None,
     module: Module,
     sensitivity: Sensitivity,
+    now: datetime | None = None,
 ) -> list[Notification]:
     """Add notification rows to the caller's transaction (no commit).
 
@@ -82,15 +86,23 @@ def emit(  # noqa: PLR0913 - a notification carries the full display envelope
         )
     else:
         recipient_ids = [recipient_user_id]
+    # Pre-catalogue call sites: the type string resolves to its catalogue event
+    # (``catalog.for_type``), so these notices inherit preferences, policy and
+    # branded email without each producer being rewritten. New producers call
+    # ``publishing.publish`` with an explicit event and structured message.
+    event = catalog.for_type(type)
+    message = Message(title=title, summary=body or title)
     scope = InstitutionScope.INSTITUTION if bank_id is not None else InstitutionScope.ORGANIZATION
     rows = [
         Notification(
             organization_id=ctx.organization_id,
             recipient_user_id=recipient,
             type=type,
+            event_key=event.key,
             severity=severity,
             title=title,
             body=body,
+            data=message.to_data(),
             entity_type=entity_type,
             entity_id=None if entity_id is None else str(entity_id),
             institution_scope=scope.value,
@@ -102,7 +114,43 @@ def emit(  # noqa: PLR0913 - a notification carries the full display envelope
     ]
     db.add_all(rows)
     db.flush()
+    publishing.queue_email(
+        db, ctx.organization_id, event, _email_targets(db, ctx, rows), now=now or datetime.now(UTC)
+    )
     return rows
+
+
+def _email_targets(
+    db: Session, ctx: TenantContext, rows: list[Notification]
+) -> list[tuple[Notification, User]]:
+    """Who a legacy row emails: its recipient, or every active admin for an org-wide row.
+
+    The org-wide fan-out is the behaviour the SMTP mirror had; each recipient
+    is still filtered by the feed's visibility rules at send time.
+    """
+    direct = {row.recipient_user_id for row in rows if row.recipient_user_id is not None}
+    users = {
+        user.id: user
+        for user in db.scalars(
+            select(User).where(
+                User.organization_id == ctx.organization_id,
+                User.is_active.is_(True),
+                or_(
+                    User.id.in_(direct),
+                    User.role.in_((ACCOUNT_ADMIN_ROLE, ADMIN_ROLE)),
+                ),
+            )
+        )
+        if user.auth_provider != "service"
+    }
+    admins = [user for user in users.values() if user.role in (ACCOUNT_ADMIN_ROLE, ADMIN_ROLE)]
+    targets: list[tuple[Notification, User]] = []
+    for row in rows:
+        if row.recipient_user_id is None:
+            targets.extend((row, admin) for admin in admins)
+        elif row.recipient_user_id in users:
+            targets.append((row, users[row.recipient_user_id]))
+    return targets
 
 
 def family_visibility_condition(db: Session, ctx: TenantContext) -> ColumnElement[bool]:

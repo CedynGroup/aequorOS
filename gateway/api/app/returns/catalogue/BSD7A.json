@@ -1,0 +1,3904 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD7A",
+ "name": "Current Year Results",
+ "cadence": "monthly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd7a-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD7A REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_bsd7a",
+   "title": "BSD7A",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD7A.ITEM.R5.item",
+     "label": "Interest received and receivable",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!C5",
+     "label": "Interest received and receivable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!D5",
+     "label": "Interest received and receivable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!E5",
+     "label": "Interest received and receivable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!F5",
+     "label": "Interest received and receivable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!G5",
+     "label": "Interest received and receivable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!H5",
+     "label": "Interest received and receivable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R6.month_domestic",
+     "label": "(a) Overdrafts, Loans & Other Advances — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R6.month_foreign",
+     "label": "(a) Overdrafts, Loans & Other Advances — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E6",
+     "label": "(a) Overdrafts, Loans & Other Advances",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R6.ptd_domestic",
+     "label": "(a) Overdrafts, Loans & Other Advances — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R6.ptd_foreign",
+     "label": "(a) Overdrafts, Loans & Other Advances — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H6",
+     "label": "(a) Overdrafts, Loans & Other Advances",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R7.month_domestic",
+     "label": "(b) Bills (including discounts) — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R7.month_foreign",
+     "label": "(b) Bills (including discounts) — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E7",
+     "label": "(b) Bills (including discounts)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R7.ptd_domestic",
+     "label": "(b) Bills (including discounts) — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R7.ptd_foreign",
+     "label": "(b) Bills (including discounts) — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H7",
+     "label": "(b) Bills (including discounts)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R8.month_domestic",
+     "label": "(c) Investments (including discounts) — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R8.month_foreign",
+     "label": "(c) Investments (including discounts) — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E8",
+     "label": "(c) Investments (including discounts)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R8.ptd_domestic",
+     "label": "(c) Investments (including discounts) — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R8.ptd_foreign",
+     "label": "(c) Investments (including discounts) — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H8",
+     "label": "(c) Investments (including discounts)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R9.item",
+     "label": "Interest Paid and Payable",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!C9",
+     "label": "Interest Paid and Payable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!D9",
+     "label": "Interest Paid and Payable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!E9",
+     "label": "Interest Paid and Payable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!F9",
+     "label": "Interest Paid and Payable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!G9",
+     "label": "Interest Paid and Payable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!H9",
+     "label": "Interest Paid and Payable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!C10",
+     "label": "(a) Interest on deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!D10",
+     "label": "(a) Interest on deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!E10",
+     "label": "(a) Interest on deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!F10",
+     "label": "(a) Interest on deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!G10",
+     "label": "(a) Interest on deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!H10",
+     "label": "(a) Interest on deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R11.month_domestic",
+     "label": "-Savings — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R11.month_foreign",
+     "label": "-Savings — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E11",
+     "label": "-Savings",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R11.ptd_domestic",
+     "label": "-Savings — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R11.ptd_foreign",
+     "label": "-Savings — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H11",
+     "label": "-Savings",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R12.month_domestic",
+     "label": "-Current — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R12.month_foreign",
+     "label": "-Current — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E12",
+     "label": "-Current",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R12.ptd_domestic",
+     "label": "-Current — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R12.ptd_foreign",
+     "label": "-Current — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H12",
+     "label": "-Current",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R13.month_domestic",
+     "label": "-Time — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R13.month_foreign",
+     "label": "-Time — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E13",
+     "label": "-Time",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R13.ptd_domestic",
+     "label": "-Time — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R13.ptd_foreign",
+     "label": "-Time — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H13",
+     "label": "-Time",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R14.month_domestic",
+     "label": "-Borrowings — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R14.month_foreign",
+     "label": "-Borrowings — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E14",
+     "label": "-Borrowings",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R14.ptd_domestic",
+     "label": "-Borrowings — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R14.ptd_foreign",
+     "label": "-Borrowings — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H14",
+     "label": "-Borrowings",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R15.month_domestic",
+     "label": "(b) Other Interest paymants — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R15.month_foreign",
+     "label": "(b) Other Interest paymants — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E15",
+     "label": "(b) Other Interest paymants",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R15.ptd_domestic",
+     "label": "(b) Other Interest paymants — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R15.ptd_foreign",
+     "label": "(b) Other Interest paymants — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H15",
+     "label": "(b) Other Interest paymants",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R16.item",
+     "label": "Net Interest Income (1-2)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!C16",
+     "label": "Net Interest Income (1-2)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!D16",
+     "label": "Net Interest Income (1-2)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!E16",
+     "label": "Net Interest Income (1-2)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!F16",
+     "label": "Net Interest Income (1-2)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!G16",
+     "label": "Net Interest Income (1-2)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!H16",
+     "label": "Net Interest Income (1-2)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R17.item",
+     "label": "Profit/Loss on foreign exchange dealings",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R17.month_domestic",
+     "label": "Profit/Loss on foreign exchange dealings — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R17.month_foreign",
+     "label": "Profit/Loss on foreign exchange dealings — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E17",
+     "label": "Profit/Loss on foreign exchange dealings",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R17.ptd_domestic",
+     "label": "Profit/Loss on foreign exchange dealings — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R17.ptd_foreign",
+     "label": "Profit/Loss on foreign exchange dealings — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H17",
+     "label": "Profit/Loss on foreign exchange dealings",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R18.item",
+     "label": "Income from Fees and Commissions",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R18.month_domestic",
+     "label": "Income from Fees and Commissions — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R18.month_foreign",
+     "label": "Income from Fees and Commissions — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E18",
+     "label": "Income from Fees and Commissions",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R18.ptd_domestic",
+     "label": "Income from Fees and Commissions — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R18.ptd_foreign",
+     "label": "Income from Fees and Commissions — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H18",
+     "label": "Income from Fees and Commissions",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R19.item",
+     "label": "Dividends received",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R19.month_domestic",
+     "label": "Dividends received — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R19.month_foreign",
+     "label": "Dividends received — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E19",
+     "label": "Dividends received",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R19.ptd_domestic",
+     "label": "Dividends received — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R19.ptd_foreign",
+     "label": "Dividends received — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H19",
+     "label": "Dividends received",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R20.item",
+     "label": "Profit/Loss on sale of Property, Plant and Equipment",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R20.month_domestic",
+     "label": "Profit/Loss on sale of Property, Plant and Equipment — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R20.month_foreign",
+     "label": "Profit/Loss on sale of Property, Plant and Equipment — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E20",
+     "label": "Profit/Loss on sale of Property, Plant and Equipment",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R20.ptd_domestic",
+     "label": "Profit/Loss on sale of Property, Plant and Equipment — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R20.ptd_foreign",
+     "label": "Profit/Loss on sale of Property, Plant and Equipment — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H20",
+     "label": "Profit/Loss on sale of Property, Plant and Equipment",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R21.item",
+     "label": "Rent Reveivable",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R21.month_domestic",
+     "label": "Rent Reveivable — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R21.month_foreign",
+     "label": "Rent Reveivable — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E21",
+     "label": "Rent Reveivable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R21.ptd_domestic",
+     "label": "Rent Reveivable — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R21.ptd_foreign",
+     "label": "Rent Reveivable — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H21",
+     "label": "Rent Reveivable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R22.item",
+     "label": "Gain on dealing assets",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R22.month_domestic",
+     "label": "Gain on dealing assets — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R22.month_foreign",
+     "label": "Gain on dealing assets — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E22",
+     "label": "Gain on dealing assets",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R22.ptd_domestic",
+     "label": "Gain on dealing assets — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R22.ptd_foreign",
+     "label": "Gain on dealing assets — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H22",
+     "label": "Gain on dealing assets",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R23.item",
+     "label": "Other Income",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R23.month_domestic",
+     "label": "Other Income — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R23.month_foreign",
+     "label": "Other Income — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E23",
+     "label": "Other Income",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R23.ptd_domestic",
+     "label": "Other Income — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R23.ptd_foreign",
+     "label": "Other Income — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H23",
+     "label": "Other Income",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R24.item",
+     "label": "Net Income (3+4+5+6+7+…….+10)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!C24",
+     "label": "Net Income (3+4+5+6+7+…….+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!D24",
+     "label": "Net Income (3+4+5+6+7+…….+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!E24",
+     "label": "Net Income (3+4+5+6+7+…….+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!F24",
+     "label": "Net Income (3+4+5+6+7+…….+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!G24",
+     "label": "Net Income (3+4+5+6+7+…….+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!H24",
+     "label": "Net Income (3+4+5+6+7+…….+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R25.item",
+     "label": "Operating Expense - Staff",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R25.month_domestic",
+     "label": "Operating Expense - Staff — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R25.month_foreign",
+     "label": "Operating Expense - Staff — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E25",
+     "label": "Operating Expense - Staff",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R25.ptd_domestic",
+     "label": "Operating Expense - Staff — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R25.ptd_foreign",
+     "label": "Operating Expense - Staff — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H25",
+     "label": "Operating Expense - Staff",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R26.item",
+     "label": "-Training",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R26.month_domestic",
+     "label": "-Training — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R26.month_foreign",
+     "label": "-Training — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E26",
+     "label": "-Training",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R26.ptd_domestic",
+     "label": "-Training — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R26.ptd_foreign",
+     "label": "-Training — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H26",
+     "label": "-Training",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R27.item",
+     "label": "-Emoluments",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R27.month_domestic",
+     "label": "-Emoluments — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R27.month_foreign",
+     "label": "-Emoluments — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E27",
+     "label": "-Emoluments",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R27.ptd_domestic",
+     "label": "-Emoluments — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R27.ptd_foreign",
+     "label": "-Emoluments — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H27",
+     "label": "-Emoluments",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R28.item",
+     "label": "-Others",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R28.month_domestic",
+     "label": "-Others — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R28.month_foreign",
+     "label": "-Others — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E28",
+     "label": "-Others",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R28.ptd_domestic",
+     "label": "-Others — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R28.ptd_foreign",
+     "label": "-Others — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H28",
+     "label": "-Others",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R29.item",
+     "label": "- Occupancy",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R29.month_domestic",
+     "label": "- Occupancy — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R29.month_foreign",
+     "label": "- Occupancy — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E29",
+     "label": "- Occupancy",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R29.ptd_domestic",
+     "label": "- Occupancy — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R29.ptd_foreign",
+     "label": "- Occupancy — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H29",
+     "label": "- Occupancy",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R30.item",
+     "label": "- Travel",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R30.month_domestic",
+     "label": "- Travel — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R30.month_foreign",
+     "label": "- Travel — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E30",
+     "label": "- Travel",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R30.ptd_domestic",
+     "label": "- Travel — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R30.ptd_foreign",
+     "label": "- Travel — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H30",
+     "label": "- Travel",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R31.item",
+     "label": "- Admin. & Other",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R31.month_domestic",
+     "label": "- Admin. & Other — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R31.month_foreign",
+     "label": "- Admin. & Other — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E31",
+     "label": "- Admin. & Other",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R31.ptd_domestic",
+     "label": "- Admin. & Other — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R31.ptd_foreign",
+     "label": "- Admin. & Other — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H31",
+     "label": "- Admin. & Other",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R32.item",
+     "label": "Total Operating Expenses (12+13+14+………+18)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!C32",
+     "label": "Total Operating Expenses (12+13+14+………+18)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!D32",
+     "label": "Total Operating Expenses (12+13+14+………+18)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!E32",
+     "label": "Total Operating Expenses (12+13+14+………+18)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!F32",
+     "label": "Total Operating Expenses (12+13+14+………+18)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!G32",
+     "label": "Total Operating Expenses (12+13+14+………+18)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!H32",
+     "label": "Total Operating Expenses (12+13+14+………+18)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R33.item",
+     "label": "Provisions - Depreciation",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R33.month_domestic",
+     "label": "Provisions - Depreciation — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R33.month_foreign",
+     "label": "Provisions - Depreciation — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E33",
+     "label": "Provisions - Depreciation",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R33.ptd_domestic",
+     "label": "Provisions - Depreciation — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R33.ptd_foreign",
+     "label": "Provisions - Depreciation — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H33",
+     "label": "Provisions - Depreciation",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R34.item",
+     "label": "- Bad Debts",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R34.month_domestic",
+     "label": "- Bad Debts — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R34.month_foreign",
+     "label": "- Bad Debts — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E34",
+     "label": "- Bad Debts",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R34.ptd_domestic",
+     "label": "- Bad Debts — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R34.ptd_foreign",
+     "label": "- Bad Debts — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H34",
+     "label": "- Bad Debts",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R35.item",
+     "label": "- Other (specify)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R35.month_domestic",
+     "label": "- Other (specify) — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R35.month_foreign",
+     "label": "- Other (specify) — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E35",
+     "label": "- Other (specify)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R35.ptd_domestic",
+     "label": "- Other (specify) — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R35.ptd_foreign",
+     "label": "- Other (specify) — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H35",
+     "label": "- Other (specify)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R36.item",
+     "label": "Total Provisions (20+21+22)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!C36",
+     "label": "Total Provisions (20+21+22)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!D36",
+     "label": "Total Provisions (20+21+22)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!E36",
+     "label": "Total Provisions (20+21+22)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!F36",
+     "label": "Total Provisions (20+21+22)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!G36",
+     "label": "Total Provisions (20+21+22)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!H36",
+     "label": "Total Provisions (20+21+22)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R37.item",
+     "label": "Loses on sale of Investment",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R37.month_domestic",
+     "label": "Loses on sale of Investment — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R37.month_foreign",
+     "label": "Loses on sale of Investment — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E37",
+     "label": "Loses on sale of Investment",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R37.ptd_domestic",
+     "label": "Loses on sale of Investment — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R37.ptd_foreign",
+     "label": "Loses on sale of Investment — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H37",
+     "label": "Loses on sale of Investment",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R38.item",
+     "label": "Loses on dealing assets",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R38.month_domestic",
+     "label": "Loses on dealing assets — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R38.month_foreign",
+     "label": "Loses on dealing assets — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E38",
+     "label": "Loses on dealing assets",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R38.ptd_domestic",
+     "label": "Loses on dealing assets — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R38.ptd_foreign",
+     "label": "Loses on dealing assets — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H38",
+     "label": "Loses on dealing assets",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R39.item",
+     "label": "Exchange losses",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R39.month_domestic",
+     "label": "Exchange losses — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R39.month_foreign",
+     "label": "Exchange losses — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E39",
+     "label": "Exchange losses",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R39.ptd_domestic",
+     "label": "Exchange losses — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R39.ptd_foreign",
+     "label": "Exchange losses — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H39",
+     "label": "Exchange losses",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R40.item",
+     "label": "Net Profit (11-19-23-24-25-26",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!C40",
+     "label": "Net Profit (11-19-23-24-25-26",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!D40",
+     "label": "Net Profit (11-19-23-24-25-26",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!E40",
+     "label": "Net Profit (11-19-23-24-25-26",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!F40",
+     "label": "Net Profit (11-19-23-24-25-26",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!G40",
+     "label": "Net Profit (11-19-23-24-25-26",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!H40",
+     "label": "Net Profit (11-19-23-24-25-26",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R41.item",
+     "label": "Provision for Taxation",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R41.month_domestic",
+     "label": "Provision for Taxation — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R41.month_foreign",
+     "label": "Provision for Taxation — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E41",
+     "label": "Provision for Taxation",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R41.ptd_domestic",
+     "label": "Provision for Taxation — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R41.ptd_foreign",
+     "label": "Provision for Taxation — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H41",
+     "label": "Provision for Taxation",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R42.item",
+     "label": "Net Profit after Taxation (27-28)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!C42",
+     "label": "Net Profit after Taxation (27-28)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!D42",
+     "label": "Net Profit after Taxation (27-28)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!E42",
+     "label": "Net Profit after Taxation (27-28)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!F42",
+     "label": "Net Profit after Taxation (27-28)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!G42",
+     "label": "Net Profit after Taxation (27-28)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!H42",
+     "label": "Net Profit after Taxation (27-28)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R43.item",
+     "label": "Extraordinary Items",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R43.month_domestic",
+     "label": "Extraordinary Items — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R43.month_foreign",
+     "label": "Extraordinary Items — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E43",
+     "label": "Extraordinary Items",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R43.ptd_domestic",
+     "label": "Extraordinary Items — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R43.ptd_foreign",
+     "label": "Extraordinary Items — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H43",
+     "label": "Extraordinary Items",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R44.item",
+     "label": "Net Profit after Tax & Ext. items (29-30)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!C44",
+     "label": "Net Profit after Tax & Ext. items (29-30)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!D44",
+     "label": "Net Profit after Tax & Ext. items (29-30)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!E44",
+     "label": "Net Profit after Tax & Ext. items (29-30)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!F44",
+     "label": "Net Profit after Tax & Ext. items (29-30)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!G44",
+     "label": "Net Profit after Tax & Ext. items (29-30)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!H44",
+     "label": "Net Profit after Tax & Ext. items (29-30)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R45.item",
+     "label": "Dividends Paid and Payable",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R45.month_domestic",
+     "label": "Dividends Paid and Payable — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R45.month_foreign",
+     "label": "Dividends Paid and Payable — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E45",
+     "label": "Dividends Paid and Payable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R45.ptd_domestic",
+     "label": "Dividends Paid and Payable — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R45.ptd_foreign",
+     "label": "Dividends Paid and Payable — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H45",
+     "label": "Dividends Paid and Payable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R46.item",
+     "label": "Retained Profit/Loss (31-32)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!C46",
+     "label": "Retained Profit/Loss (31-32)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!D46",
+     "label": "Retained Profit/Loss (31-32)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!E46",
+     "label": "Retained Profit/Loss (31-32)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!F46",
+     "label": "Retained Profit/Loss (31-32)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!G46",
+     "label": "Retained Profit/Loss (31-32)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!H46",
+     "label": "Retained Profit/Loss (31-32)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R47.item",
+     "label": "Statutory Reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R47.month_domestic",
+     "label": "Statutory Reserves — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R47.month_foreign",
+     "label": "Statutory Reserves — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E47",
+     "label": "Statutory Reserves",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R47.ptd_domestic",
+     "label": "Statutory Reserves — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R47.ptd_foreign",
+     "label": "Statutory Reserves — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H47",
+     "label": "Statutory Reserves",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R48.item",
+     "label": "Other reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R48.month_domestic",
+     "label": "Other reserves — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R48.month_foreign",
+     "label": "Other reserves — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E48",
+     "label": "Other reserves",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R48.ptd_domestic",
+     "label": "Other reserves — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R48.ptd_foreign",
+     "label": "Other reserves — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H48",
+     "label": "Other reserves",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R49.item",
+     "label": "Income Surplus",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R49.month_domestic",
+     "label": "Income Surplus — month domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R49.month_foreign",
+     "label": "Income Surplus — month foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!E49",
+     "label": "Income Surplus",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.R49.ptd_domestic",
+     "label": "Income Surplus — ptd domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A.R49.ptd_foreign",
+     "label": "Income Surplus — ptd foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7A!H49",
+     "label": "Income Surplus",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R50.item",
+     "label": "TOTAL RESERVES",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!C50",
+     "label": "TOTAL RESERVES",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!D50",
+     "label": "TOTAL RESERVES",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!E50",
+     "label": "TOTAL RESERVES",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!F50",
+     "label": "TOTAL RESERVES",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!G50",
+     "label": "TOTAL RESERVES",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A!H50",
+     "label": "TOTAL RESERVES",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7A.ITEM.R54.item",
+     "label": "Total Assets",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R54.quarter",
+     "label": "Total Assets — quarter",
+     "kind": "value"
+    },
+    {
+     "code": "BSD7A.R54.ptd",
+     "label": "Total Assets — ptd",
+     "kind": "value"
+    },
+    {
+     "code": "BSD7A.ITEM.R55.item",
+     "label": "Property, Plant and Equipment",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R55.quarter",
+     "label": "Property, Plant and Equipment — quarter",
+     "kind": "value"
+    },
+    {
+     "code": "BSD7A.R55.ptd",
+     "label": "Property, Plant and Equipment — ptd",
+     "kind": "value"
+    },
+    {
+     "code": "BSD7A.ITEM.R56.item",
+     "label": "Shareholders' Funds",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R56.quarter",
+     "label": "Shareholders' Funds — quarter",
+     "kind": "value"
+    },
+    {
+     "code": "BSD7A.R56.ptd",
+     "label": "Shareholders' Funds — ptd",
+     "kind": "value"
+    },
+    {
+     "code": "BSD7A.ITEM.R57.item",
+     "label": "Assets Earning Interest or Discount",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R57.quarter",
+     "label": "Assets Earning Interest or Discount — quarter",
+     "kind": "value"
+    },
+    {
+     "code": "BSD7A.R57.ptd",
+     "label": "Assets Earning Interest or Discount — ptd",
+     "kind": "value"
+    },
+    {
+     "code": "BSD7A.ITEM.R58.item",
+     "label": "Liabilities Bearing Interest or Discount",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R58.quarter",
+     "label": "Liabilities Bearing Interest or Discount — quarter",
+     "kind": "value"
+    },
+    {
+     "code": "BSD7A.R58.ptd",
+     "label": "Liabilities Bearing Interest or Discount — ptd",
+     "kind": "value"
+    },
+    {
+     "code": "BSD7A.ITEM.R63.item",
+     "label": "Managerial",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R63.quarter",
+     "label": "Managerial — quarter",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R63.ptd",
+     "label": "Managerial — ptd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.ITEM.R64.item",
+     "label": "Clerical",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R64.quarter",
+     "label": "Clerical — quarter",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R64.ptd",
+     "label": "Clerical — ptd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.ITEM.R65.item",
+     "label": "Non-Clerical",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R65.quarter",
+     "label": "Non-Clerical — quarter",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R65.ptd",
+     "label": "Non-Clerical — ptd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.ITEM.R66.item",
+     "label": "Sub-total (31+32+33)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!C66",
+     "label": "Sub-total (31+32+33)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!D66",
+     "label": "Sub-total (31+32+33)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.ITEM.R68.item",
+     "label": "Managerial",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R68.quarter",
+     "label": "Managerial — quarter",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R68.ptd",
+     "label": "Managerial — ptd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.ITEM.R69.item",
+     "label": "Clerical",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R69.quarter",
+     "label": "Clerical — quarter",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R69.ptd",
+     "label": "Clerical — ptd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.ITEM.R70.item",
+     "label": "Non-Clerical",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R70.quarter",
+     "label": "Non-Clerical — quarter",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.R70.ptd",
+     "label": "Non-Clerical — ptd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.ITEM.R71.item",
+     "label": "Sub-total (35+36+37)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!C71",
+     "label": "Sub-total (35+36+37)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!D71",
+     "label": "Sub-total (35+36+37)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A.ITEM.R72.item",
+     "label": "Total Staff (34+38)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!C72",
+     "label": "Total Staff (34+38)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "BSD7A!D72",
+     "label": "Total Staff (34+38)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "BSD7A-ARI-0001",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C5",
+   "terms": [
+    "BSD7A.R6.month_domestic",
+    "BSD7A.R7.month_domestic",
+    "BSD7A.R8.month_domestic"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7A!C5 follows the template formula =SUM(C6:C8)"
+  },
+  {
+   "id": "BSD7A-ARI-0002",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D5",
+   "terms": [
+    "BSD7A.R6.month_foreign",
+    "BSD7A.R7.month_foreign",
+    "BSD7A.R8.month_foreign"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7A!D5 follows the template formula =SUM(D6:D8)"
+  },
+  {
+   "id": "BSD7A-ARI-0003",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E5",
+   "terms": [
+    "BSD7A!C5",
+    "BSD7A!D5"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E5 follows the template formula =C5+D5"
+  },
+  {
+   "id": "BSD7A-ARI-0004",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!F5",
+   "terms": [
+    "BSD7A.R6.ptd_domestic",
+    "BSD7A.R7.ptd_domestic",
+    "BSD7A.R8.ptd_domestic"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7A!F5 follows the template formula =SUM(F6:F8)"
+  },
+  {
+   "id": "BSD7A-ARI-0005",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!G5",
+   "terms": [
+    "BSD7A.R6.ptd_foreign",
+    "BSD7A.R7.ptd_foreign",
+    "BSD7A.R8.ptd_foreign"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7A!G5 follows the template formula =SUM(G6:G8)"
+  },
+  {
+   "id": "BSD7A-ARI-0006",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H5",
+   "terms": [
+    "BSD7A!F5",
+    "BSD7A!G5"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H5 follows the template formula =F5+G5"
+  },
+  {
+   "id": "BSD7A-ARI-0007",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E6",
+   "terms": [
+    "BSD7A.R6.month_domestic",
+    "BSD7A.R6.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E6 follows the template formula =C6+D6"
+  },
+  {
+   "id": "BSD7A-ARI-0008",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H6",
+   "terms": [
+    "BSD7A.R6.ptd_domestic",
+    "BSD7A.R6.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H6 follows the template formula =F6+G6"
+  },
+  {
+   "id": "BSD7A-ARI-0009",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E7",
+   "terms": [
+    "BSD7A.R7.month_domestic",
+    "BSD7A.R7.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E7 follows the template formula =C7+D7"
+  },
+  {
+   "id": "BSD7A-ARI-0010",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H7",
+   "terms": [
+    "BSD7A.R7.ptd_domestic",
+    "BSD7A.R7.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H7 follows the template formula =F7+G7"
+  },
+  {
+   "id": "BSD7A-ARI-0011",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E8",
+   "terms": [
+    "BSD7A.R8.month_domestic",
+    "BSD7A.R8.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E8 follows the template formula =C8+D8"
+  },
+  {
+   "id": "BSD7A-ARI-0012",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H8",
+   "terms": [
+    "BSD7A.R8.ptd_domestic",
+    "BSD7A.R8.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H8 follows the template formula =F8+G8"
+  },
+  {
+   "id": "BSD7A-ARI-0013",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C9",
+   "terms": [
+    "BSD7A!C10",
+    "BSD7A.R15.month_domestic"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!C9 follows the template formula =C10+C15"
+  },
+  {
+   "id": "BSD7A-ARI-0014",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D9",
+   "terms": [
+    "BSD7A!D10",
+    "BSD7A.R15.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!D9 follows the template formula =D10+D15"
+  },
+  {
+   "id": "BSD7A-ARI-0015",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E9",
+   "terms": [
+    "BSD7A!C9",
+    "BSD7A!D9"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E9 follows the template formula =C9+D9"
+  },
+  {
+   "id": "BSD7A-ARI-0016",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!F9",
+   "terms": [
+    "BSD7A!F10",
+    "BSD7A.R15.ptd_domestic"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!F9 follows the template formula =F10+F15"
+  },
+  {
+   "id": "BSD7A-ARI-0017",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!G9",
+   "terms": [
+    "BSD7A!G10",
+    "BSD7A.R15.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!G9 follows the template formula =G10+G15"
+  },
+  {
+   "id": "BSD7A-ARI-0018",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H9",
+   "terms": [
+    "BSD7A!F9",
+    "BSD7A!G9"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H9 follows the template formula =F9+G9"
+  },
+  {
+   "id": "BSD7A-ARI-0019",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C10",
+   "terms": [
+    "BSD7A.R11.month_domestic",
+    "BSD7A.R12.month_domestic",
+    "BSD7A.R13.month_domestic",
+    "BSD7A.R14.month_domestic"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD7A!C10 follows the template formula =SUM(C11:C14)"
+  },
+  {
+   "id": "BSD7A-ARI-0020",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D10",
+   "terms": [
+    "BSD7A.R11.month_foreign",
+    "BSD7A.R12.month_foreign",
+    "BSD7A.R13.month_foreign",
+    "BSD7A.R14.month_foreign"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD7A!D10 follows the template formula =SUM(D11:D14)"
+  },
+  {
+   "id": "BSD7A-ARI-0021",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E10",
+   "terms": [
+    "BSD7A!C10",
+    "BSD7A!D10"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E10 follows the template formula =C10+D10"
+  },
+  {
+   "id": "BSD7A-ARI-0022",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!F10",
+   "terms": [
+    "BSD7A.R11.ptd_domestic",
+    "BSD7A.R12.ptd_domestic",
+    "BSD7A.R13.ptd_domestic",
+    "BSD7A.R14.ptd_domestic"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD7A!F10 follows the template formula =SUM(F11:F14)"
+  },
+  {
+   "id": "BSD7A-ARI-0023",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!G10",
+   "terms": [
+    "BSD7A.R11.ptd_foreign",
+    "BSD7A.R12.ptd_foreign",
+    "BSD7A.R13.ptd_foreign",
+    "BSD7A.R14.ptd_foreign"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD7A!G10 follows the template formula =SUM(G11:G14)"
+  },
+  {
+   "id": "BSD7A-ARI-0024",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H10",
+   "terms": [
+    "BSD7A!F10",
+    "BSD7A!G10"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H10 follows the template formula =F10+G10"
+  },
+  {
+   "id": "BSD7A-ARI-0025",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E11",
+   "terms": [
+    "BSD7A.R11.month_domestic",
+    "BSD7A.R11.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E11 follows the template formula =C11+D11"
+  },
+  {
+   "id": "BSD7A-ARI-0026",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H11",
+   "terms": [
+    "BSD7A.R11.ptd_domestic",
+    "BSD7A.R11.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H11 follows the template formula =F11+G11"
+  },
+  {
+   "id": "BSD7A-ARI-0027",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E12",
+   "terms": [
+    "BSD7A.R12.month_domestic",
+    "BSD7A.R12.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E12 follows the template formula =C12+D12"
+  },
+  {
+   "id": "BSD7A-ARI-0028",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H12",
+   "terms": [
+    "BSD7A.R12.ptd_domestic",
+    "BSD7A.R12.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H12 follows the template formula =F12+G12"
+  },
+  {
+   "id": "BSD7A-ARI-0029",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E13",
+   "terms": [
+    "BSD7A.R13.month_domestic",
+    "BSD7A.R13.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E13 follows the template formula =C13+D13"
+  },
+  {
+   "id": "BSD7A-ARI-0030",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H13",
+   "terms": [
+    "BSD7A.R13.ptd_domestic",
+    "BSD7A.R13.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H13 follows the template formula =F13+G13"
+  },
+  {
+   "id": "BSD7A-ARI-0031",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E14",
+   "terms": [
+    "BSD7A.R14.month_domestic",
+    "BSD7A.R14.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E14 follows the template formula =C14+D14"
+  },
+  {
+   "id": "BSD7A-ARI-0032",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H14",
+   "terms": [
+    "BSD7A.R14.ptd_domestic",
+    "BSD7A.R14.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H14 follows the template formula =F14+G14"
+  },
+  {
+   "id": "BSD7A-ARI-0033",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E15",
+   "terms": [
+    "BSD7A.R15.month_domestic",
+    "BSD7A.R15.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E15 follows the template formula =C15+D15"
+  },
+  {
+   "id": "BSD7A-ARI-0034",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H15",
+   "terms": [
+    "BSD7A.R15.ptd_domestic",
+    "BSD7A.R15.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H15 follows the template formula =F15+G15"
+  },
+  {
+   "id": "BSD7A-ARI-0035",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C16",
+   "terms": [
+    "BSD7A!C5"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!C16 follows the template formula =C5-C9",
+   "subtract": [
+    "BSD7A!C9"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0036",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D16",
+   "terms": [
+    "BSD7A!D5"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!D16 follows the template formula =D5-D9",
+   "subtract": [
+    "BSD7A!D9"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0037",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E16",
+   "terms": [
+    "BSD7A!C16",
+    "BSD7A!D16"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E16 follows the template formula =C16+D16"
+  },
+  {
+   "id": "BSD7A-ARI-0038",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!F16",
+   "terms": [
+    "BSD7A!F5"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!F16 follows the template formula =F5-F9",
+   "subtract": [
+    "BSD7A!F9"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0039",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!G16",
+   "terms": [
+    "BSD7A!G5"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!G16 follows the template formula =G5-G9",
+   "subtract": [
+    "BSD7A!G9"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0040",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H16",
+   "terms": [
+    "BSD7A!F16",
+    "BSD7A!G16"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H16 follows the template formula =F16+G16"
+  },
+  {
+   "id": "BSD7A-ARI-0041",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E17",
+   "terms": [
+    "BSD7A.R17.month_domestic",
+    "BSD7A.R17.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E17 follows the template formula =C17+D17"
+  },
+  {
+   "id": "BSD7A-ARI-0042",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H17",
+   "terms": [
+    "BSD7A.R17.ptd_domestic",
+    "BSD7A.R17.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H17 follows the template formula =F17+G17"
+  },
+  {
+   "id": "BSD7A-ARI-0043",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E18",
+   "terms": [
+    "BSD7A.R18.month_domestic",
+    "BSD7A.R18.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E18 follows the template formula =C18+D18"
+  },
+  {
+   "id": "BSD7A-ARI-0044",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H18",
+   "terms": [
+    "BSD7A.R18.ptd_domestic",
+    "BSD7A.R18.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H18 follows the template formula =F18+G18"
+  },
+  {
+   "id": "BSD7A-ARI-0045",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E19",
+   "terms": [
+    "BSD7A.R19.month_domestic",
+    "BSD7A.R19.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E19 follows the template formula =C19+D19"
+  },
+  {
+   "id": "BSD7A-ARI-0046",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H19",
+   "terms": [
+    "BSD7A.R19.ptd_domestic",
+    "BSD7A.R19.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H19 follows the template formula =F19+G19"
+  },
+  {
+   "id": "BSD7A-ARI-0047",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E20",
+   "terms": [
+    "BSD7A.R20.month_domestic",
+    "BSD7A.R20.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E20 follows the template formula =C20+D20"
+  },
+  {
+   "id": "BSD7A-ARI-0048",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H20",
+   "terms": [
+    "BSD7A.R20.ptd_domestic",
+    "BSD7A.R20.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H20 follows the template formula =F20+G20"
+  },
+  {
+   "id": "BSD7A-ARI-0049",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E21",
+   "terms": [
+    "BSD7A.R21.month_domestic",
+    "BSD7A.R21.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E21 follows the template formula =C21+D21"
+  },
+  {
+   "id": "BSD7A-ARI-0050",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H21",
+   "terms": [
+    "BSD7A.R21.ptd_domestic",
+    "BSD7A.R21.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H21 follows the template formula =F21+G21"
+  },
+  {
+   "id": "BSD7A-ARI-0051",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E22",
+   "terms": [
+    "BSD7A.R22.month_domestic",
+    "BSD7A.R22.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E22 follows the template formula =C22+D22"
+  },
+  {
+   "id": "BSD7A-ARI-0052",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H22",
+   "terms": [
+    "BSD7A.R22.ptd_domestic",
+    "BSD7A.R22.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H22 follows the template formula =F22+G22"
+  },
+  {
+   "id": "BSD7A-ARI-0053",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E23",
+   "terms": [
+    "BSD7A.R23.month_domestic",
+    "BSD7A.R23.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E23 follows the template formula =C23+D23"
+  },
+  {
+   "id": "BSD7A-ARI-0054",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H23",
+   "terms": [
+    "BSD7A.R23.ptd_domestic",
+    "BSD7A.R23.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H23 follows the template formula =F23+G23"
+  },
+  {
+   "id": "BSD7A-ARI-0055",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C24",
+   "terms": [
+    "BSD7A!C16",
+    "BSD7A.R17.month_domestic",
+    "BSD7A.R18.month_domestic",
+    "BSD7A.R19.month_domestic",
+    "BSD7A.R20.month_domestic",
+    "BSD7A.R21.month_domestic",
+    "BSD7A.R22.month_domestic",
+    "BSD7A.R23.month_domestic"
+   ],
+   "tolerance": "0.045",
+   "description": "BSD7A!C24 follows the template formula =SUM(C16:C23)"
+  },
+  {
+   "id": "BSD7A-ARI-0056",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D24",
+   "terms": [
+    "BSD7A!D16",
+    "BSD7A.R17.month_foreign",
+    "BSD7A.R18.month_foreign",
+    "BSD7A.R19.month_foreign",
+    "BSD7A.R20.month_foreign",
+    "BSD7A.R21.month_foreign",
+    "BSD7A.R22.month_foreign",
+    "BSD7A.R23.month_foreign"
+   ],
+   "tolerance": "0.045",
+   "description": "BSD7A!D24 follows the template formula =SUM(D16:D23)"
+  },
+  {
+   "id": "BSD7A-ARI-0057",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E24",
+   "terms": [
+    "BSD7A!C24",
+    "BSD7A!D24"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E24 follows the template formula =C24+D24"
+  },
+  {
+   "id": "BSD7A-ARI-0058",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!F24",
+   "terms": [
+    "BSD7A!F16",
+    "BSD7A.R17.ptd_domestic",
+    "BSD7A.R18.ptd_domestic",
+    "BSD7A.R19.ptd_domestic",
+    "BSD7A.R20.ptd_domestic",
+    "BSD7A.R21.ptd_domestic",
+    "BSD7A.R22.ptd_domestic",
+    "BSD7A.R23.ptd_domestic"
+   ],
+   "tolerance": "0.045",
+   "description": "BSD7A!F24 follows the template formula =SUM(F16:F23)"
+  },
+  {
+   "id": "BSD7A-ARI-0059",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!G24",
+   "terms": [
+    "BSD7A!G16",
+    "BSD7A.R17.ptd_foreign",
+    "BSD7A.R18.ptd_foreign",
+    "BSD7A.R19.ptd_foreign",
+    "BSD7A.R20.ptd_foreign",
+    "BSD7A.R21.ptd_foreign",
+    "BSD7A.R22.ptd_foreign",
+    "BSD7A.R23.ptd_foreign"
+   ],
+   "tolerance": "0.045",
+   "description": "BSD7A!G24 follows the template formula =SUM(G16:G23)"
+  },
+  {
+   "id": "BSD7A-ARI-0060",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H24",
+   "terms": [
+    "BSD7A!F24",
+    "BSD7A!G24"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H24 follows the template formula =F24+G24"
+  },
+  {
+   "id": "BSD7A-ARI-0061",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E25",
+   "terms": [
+    "BSD7A.R25.month_domestic",
+    "BSD7A.R25.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E25 follows the template formula =C25+D25"
+  },
+  {
+   "id": "BSD7A-ARI-0062",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H25",
+   "terms": [
+    "BSD7A.R25.ptd_domestic",
+    "BSD7A.R25.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H25 follows the template formula =F25+G25"
+  },
+  {
+   "id": "BSD7A-ARI-0063",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E26",
+   "terms": [
+    "BSD7A.R26.month_domestic",
+    "BSD7A.R26.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E26 follows the template formula =C26+D26"
+  },
+  {
+   "id": "BSD7A-ARI-0064",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H26",
+   "terms": [
+    "BSD7A.R26.ptd_domestic",
+    "BSD7A.R26.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H26 follows the template formula =F26+G26"
+  },
+  {
+   "id": "BSD7A-ARI-0065",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E27",
+   "terms": [
+    "BSD7A.R27.month_domestic",
+    "BSD7A.R27.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E27 follows the template formula =C27+D27"
+  },
+  {
+   "id": "BSD7A-ARI-0066",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H27",
+   "terms": [
+    "BSD7A.R27.ptd_domestic",
+    "BSD7A.R27.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H27 follows the template formula =F27+G27"
+  },
+  {
+   "id": "BSD7A-ARI-0067",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E28",
+   "terms": [
+    "BSD7A.R28.month_domestic",
+    "BSD7A.R28.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E28 follows the template formula =C28+D28"
+  },
+  {
+   "id": "BSD7A-ARI-0068",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H28",
+   "terms": [
+    "BSD7A.R28.ptd_domestic",
+    "BSD7A.R28.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H28 follows the template formula =F28+G28"
+  },
+  {
+   "id": "BSD7A-ARI-0069",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E29",
+   "terms": [
+    "BSD7A.R29.month_domestic",
+    "BSD7A.R29.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E29 follows the template formula =C29+D29"
+  },
+  {
+   "id": "BSD7A-ARI-0070",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H29",
+   "terms": [
+    "BSD7A.R29.ptd_domestic",
+    "BSD7A.R29.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H29 follows the template formula =F29+G29"
+  },
+  {
+   "id": "BSD7A-ARI-0071",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E30",
+   "terms": [
+    "BSD7A.R30.month_domestic",
+    "BSD7A.R30.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E30 follows the template formula =C30+D30"
+  },
+  {
+   "id": "BSD7A-ARI-0072",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H30",
+   "terms": [
+    "BSD7A.R30.ptd_domestic",
+    "BSD7A.R30.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H30 follows the template formula =F30+G30"
+  },
+  {
+   "id": "BSD7A-ARI-0073",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E31",
+   "terms": [
+    "BSD7A.R31.month_domestic",
+    "BSD7A.R31.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E31 follows the template formula =C31+D31"
+  },
+  {
+   "id": "BSD7A-ARI-0074",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H31",
+   "terms": [
+    "BSD7A.R31.ptd_domestic",
+    "BSD7A.R31.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H31 follows the template formula =F31+G31"
+  },
+  {
+   "id": "BSD7A-ARI-0075",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C32",
+   "terms": [
+    "BSD7A.R25.month_domestic",
+    "BSD7A.R26.month_domestic",
+    "BSD7A.R27.month_domestic",
+    "BSD7A.R28.month_domestic",
+    "BSD7A.R29.month_domestic",
+    "BSD7A.R30.month_domestic",
+    "BSD7A.R31.month_domestic"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD7A!C32 follows the template formula =SUM(C25:C31)"
+  },
+  {
+   "id": "BSD7A-ARI-0076",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D32",
+   "terms": [
+    "BSD7A.R25.month_foreign",
+    "BSD7A.R26.month_foreign",
+    "BSD7A.R27.month_foreign",
+    "BSD7A.R28.month_foreign",
+    "BSD7A.R29.month_foreign",
+    "BSD7A.R30.month_foreign",
+    "BSD7A.R31.month_foreign"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD7A!D32 follows the template formula =SUM(D25:D31)"
+  },
+  {
+   "id": "BSD7A-ARI-0077",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E32",
+   "terms": [
+    "BSD7A!C32",
+    "BSD7A!D32"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E32 follows the template formula =C32+D32"
+  },
+  {
+   "id": "BSD7A-ARI-0078",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!F32",
+   "terms": [
+    "BSD7A.R25.ptd_domestic",
+    "BSD7A.R26.ptd_domestic",
+    "BSD7A.R27.ptd_domestic",
+    "BSD7A.R28.ptd_domestic",
+    "BSD7A.R29.ptd_domestic",
+    "BSD7A.R30.ptd_domestic",
+    "BSD7A.R31.ptd_domestic"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD7A!F32 follows the template formula =SUM(F25:F31)"
+  },
+  {
+   "id": "BSD7A-ARI-0079",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!G32",
+   "terms": [
+    "BSD7A.R25.ptd_foreign",
+    "BSD7A.R26.ptd_foreign",
+    "BSD7A.R27.ptd_foreign",
+    "BSD7A.R28.ptd_foreign",
+    "BSD7A.R29.ptd_foreign",
+    "BSD7A.R30.ptd_foreign",
+    "BSD7A.R31.ptd_foreign"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD7A!G32 follows the template formula =SUM(G25:G31)"
+  },
+  {
+   "id": "BSD7A-ARI-0080",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H32",
+   "terms": [
+    "BSD7A!F32",
+    "BSD7A!G32"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H32 follows the template formula =F32+G32"
+  },
+  {
+   "id": "BSD7A-ARI-0081",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E33",
+   "terms": [
+    "BSD7A.R33.month_domestic",
+    "BSD7A.R33.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E33 follows the template formula =C33+D33"
+  },
+  {
+   "id": "BSD7A-ARI-0082",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H33",
+   "terms": [
+    "BSD7A.R33.ptd_domestic",
+    "BSD7A.R33.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H33 follows the template formula =F33+G33"
+  },
+  {
+   "id": "BSD7A-ARI-0083",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E34",
+   "terms": [
+    "BSD7A.R34.month_domestic",
+    "BSD7A.R34.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E34 follows the template formula =C34+D34"
+  },
+  {
+   "id": "BSD7A-ARI-0084",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H34",
+   "terms": [
+    "BSD7A.R34.ptd_domestic",
+    "BSD7A.R34.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H34 follows the template formula =F34+G34"
+  },
+  {
+   "id": "BSD7A-ARI-0085",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E35",
+   "terms": [
+    "BSD7A.R35.month_domestic",
+    "BSD7A.R35.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E35 follows the template formula =C35+D35"
+  },
+  {
+   "id": "BSD7A-ARI-0086",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H35",
+   "terms": [
+    "BSD7A.R35.ptd_domestic",
+    "BSD7A.R35.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H35 follows the template formula =F35+G35"
+  },
+  {
+   "id": "BSD7A-ARI-0087",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C36",
+   "terms": [
+    "BSD7A.R33.month_domestic",
+    "BSD7A.R34.month_domestic",
+    "BSD7A.R35.month_domestic"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7A!C36 follows the template formula =SUM(C33:C35)"
+  },
+  {
+   "id": "BSD7A-ARI-0088",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D36",
+   "terms": [
+    "BSD7A.R33.month_foreign",
+    "BSD7A.R34.month_foreign",
+    "BSD7A.R35.month_foreign"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7A!D36 follows the template formula =SUM(D33:D35)"
+  },
+  {
+   "id": "BSD7A-ARI-0089",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E36",
+   "terms": [
+    "BSD7A!C36",
+    "BSD7A!D36"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E36 follows the template formula =C36+D36"
+  },
+  {
+   "id": "BSD7A-ARI-0090",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!F36",
+   "terms": [
+    "BSD7A.R33.ptd_domestic",
+    "BSD7A.R34.ptd_domestic",
+    "BSD7A.R35.ptd_domestic"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7A!F36 follows the template formula =SUM(F33:F35)"
+  },
+  {
+   "id": "BSD7A-ARI-0091",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!G36",
+   "terms": [
+    "BSD7A.R33.ptd_foreign",
+    "BSD7A.R34.ptd_foreign",
+    "BSD7A.R35.ptd_foreign"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7A!G36 follows the template formula =SUM(G33:G35)"
+  },
+  {
+   "id": "BSD7A-ARI-0092",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H36",
+   "terms": [
+    "BSD7A!F36",
+    "BSD7A!G36"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H36 follows the template formula =F36+G36"
+  },
+  {
+   "id": "BSD7A-ARI-0093",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E37",
+   "terms": [
+    "BSD7A.R37.month_domestic",
+    "BSD7A.R37.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E37 follows the template formula =C37+D37"
+  },
+  {
+   "id": "BSD7A-ARI-0094",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H37",
+   "terms": [
+    "BSD7A.R37.ptd_domestic",
+    "BSD7A.R37.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H37 follows the template formula =F37+G37"
+  },
+  {
+   "id": "BSD7A-ARI-0095",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E38",
+   "terms": [
+    "BSD7A.R38.month_domestic",
+    "BSD7A.R38.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E38 follows the template formula =C38+D38"
+  },
+  {
+   "id": "BSD7A-ARI-0096",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H38",
+   "terms": [
+    "BSD7A.R38.ptd_domestic",
+    "BSD7A.R38.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H38 follows the template formula =F38+G38"
+  },
+  {
+   "id": "BSD7A-ARI-0097",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E39",
+   "terms": [
+    "BSD7A.R39.month_domestic",
+    "BSD7A.R39.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E39 follows the template formula =C39+D39"
+  },
+  {
+   "id": "BSD7A-ARI-0098",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H39",
+   "terms": [
+    "BSD7A.R39.ptd_domestic",
+    "BSD7A.R39.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H39 follows the template formula =F39+G39"
+  },
+  {
+   "id": "BSD7A-ARI-0099",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C40",
+   "terms": [
+    "BSD7A!C24"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD7A!C40 follows the template formula =C24-C32-C36-C37-C38-C39",
+   "subtract": [
+    "BSD7A!C32",
+    "BSD7A!C36",
+    "BSD7A.R37.month_domestic",
+    "BSD7A.R38.month_domestic",
+    "BSD7A.R39.month_domestic"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0100",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D40",
+   "terms": [
+    "BSD7A!D24"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD7A!D40 follows the template formula =D24-D32-D36-D37-D38-D39",
+   "subtract": [
+    "BSD7A!D32",
+    "BSD7A!D36",
+    "BSD7A.R37.month_foreign",
+    "BSD7A.R38.month_foreign",
+    "BSD7A.R39.month_foreign"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0101",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E40",
+   "terms": [
+    "BSD7A!C40",
+    "BSD7A!D40"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E40 follows the template formula =C40+D40"
+  },
+  {
+   "id": "BSD7A-ARI-0102",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!F40",
+   "terms": [
+    "BSD7A!F24"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD7A!F40 follows the template formula =F24-F32-F36-F37-F38-F39",
+   "subtract": [
+    "BSD7A!F32",
+    "BSD7A!F36",
+    "BSD7A.R37.ptd_domestic",
+    "BSD7A.R38.ptd_domestic",
+    "BSD7A.R39.ptd_domestic"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0103",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!G40",
+   "terms": [
+    "BSD7A!G24"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD7A!G40 follows the template formula =G24-G32-G36-G37-G38-G39",
+   "subtract": [
+    "BSD7A!G32",
+    "BSD7A!G36",
+    "BSD7A.R37.ptd_foreign",
+    "BSD7A.R38.ptd_foreign",
+    "BSD7A.R39.ptd_foreign"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0104",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H40",
+   "terms": [
+    "BSD7A!F40",
+    "BSD7A!G40"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H40 follows the template formula =F40+G40"
+  },
+  {
+   "id": "BSD7A-ARI-0105",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E41",
+   "terms": [
+    "BSD7A.R41.month_domestic",
+    "BSD7A.R41.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E41 follows the template formula =C41+D41"
+  },
+  {
+   "id": "BSD7A-ARI-0106",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H41",
+   "terms": [
+    "BSD7A.R41.ptd_domestic",
+    "BSD7A.R41.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H41 follows the template formula =F41+G41"
+  },
+  {
+   "id": "BSD7A-ARI-0107",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C42",
+   "terms": [
+    "BSD7A!C40"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!C42 follows the template formula =C40-C41",
+   "subtract": [
+    "BSD7A.R41.month_domestic"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0108",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D42",
+   "terms": [
+    "BSD7A!D40"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!D42 follows the template formula =D40-D41",
+   "subtract": [
+    "BSD7A.R41.month_foreign"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0109",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E42",
+   "terms": [
+    "BSD7A!C42",
+    "BSD7A!D42"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E42 follows the template formula =C42+D42"
+  },
+  {
+   "id": "BSD7A-ARI-0110",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!F42",
+   "terms": [
+    "BSD7A!F40"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!F42 follows the template formula =F40-F41",
+   "subtract": [
+    "BSD7A.R41.ptd_domestic"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0111",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!G42",
+   "terms": [
+    "BSD7A!G40"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!G42 follows the template formula =G40-G41",
+   "subtract": [
+    "BSD7A.R41.ptd_foreign"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0112",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H42",
+   "terms": [
+    "BSD7A!F42",
+    "BSD7A!G42"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H42 follows the template formula =F42+G42"
+  },
+  {
+   "id": "BSD7A-ARI-0113",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E43",
+   "terms": [
+    "BSD7A.R43.month_domestic",
+    "BSD7A.R43.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E43 follows the template formula =C43+D43"
+  },
+  {
+   "id": "BSD7A-ARI-0114",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H43",
+   "terms": [
+    "BSD7A.R43.ptd_domestic",
+    "BSD7A.R43.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H43 follows the template formula =F43+G43"
+  },
+  {
+   "id": "BSD7A-ARI-0115",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C44",
+   "terms": [
+    "BSD7A!C42"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!C44 follows the template formula =C42-C43",
+   "subtract": [
+    "BSD7A.R43.month_domestic"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0116",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D44",
+   "terms": [
+    "BSD7A!D42"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!D44 follows the template formula =D42-D43",
+   "subtract": [
+    "BSD7A.R43.month_foreign"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0117",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E44",
+   "terms": [
+    "BSD7A!C44",
+    "BSD7A!D44"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E44 follows the template formula =C44+D44"
+  },
+  {
+   "id": "BSD7A-ARI-0118",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!F44",
+   "terms": [
+    "BSD7A!F42"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!F44 follows the template formula =F42-F43",
+   "subtract": [
+    "BSD7A.R43.ptd_domestic"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0119",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!G44",
+   "terms": [
+    "BSD7A!G42"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!G44 follows the template formula =G42-G43",
+   "subtract": [
+    "BSD7A.R43.ptd_foreign"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0120",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H44",
+   "terms": [
+    "BSD7A!F44",
+    "BSD7A!G44"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H44 follows the template formula =F44+G44"
+  },
+  {
+   "id": "BSD7A-ARI-0121",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E45",
+   "terms": [
+    "BSD7A.R45.month_domestic",
+    "BSD7A.R45.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E45 follows the template formula =C45+D45"
+  },
+  {
+   "id": "BSD7A-ARI-0122",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H45",
+   "terms": [
+    "BSD7A.R45.ptd_domestic",
+    "BSD7A.R45.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H45 follows the template formula =F45+G45"
+  },
+  {
+   "id": "BSD7A-ARI-0123",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C46",
+   "terms": [
+    "BSD7A!C44"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!C46 follows the template formula =C44-C45",
+   "subtract": [
+    "BSD7A.R45.month_domestic"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0124",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D46",
+   "terms": [
+    "BSD7A!D44"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!D46 follows the template formula =D44-D45",
+   "subtract": [
+    "BSD7A.R45.month_foreign"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0125",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E46",
+   "terms": [
+    "BSD7A!C46",
+    "BSD7A!D46"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E46 follows the template formula =C46+D46"
+  },
+  {
+   "id": "BSD7A-ARI-0126",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!F46",
+   "terms": [
+    "BSD7A!F44"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!F46 follows the template formula =F44-F45",
+   "subtract": [
+    "BSD7A.R45.ptd_domestic"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0127",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!G46",
+   "terms": [
+    "BSD7A!G44"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!G46 follows the template formula =G44-G45",
+   "subtract": [
+    "BSD7A.R45.ptd_foreign"
+   ]
+  },
+  {
+   "id": "BSD7A-ARI-0128",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H46",
+   "terms": [
+    "BSD7A!F46",
+    "BSD7A!G46"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H46 follows the template formula =F46+G46"
+  },
+  {
+   "id": "BSD7A-ARI-0129",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E47",
+   "terms": [
+    "BSD7A.R47.month_domestic",
+    "BSD7A.R47.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E47 follows the template formula =C47+D47"
+  },
+  {
+   "id": "BSD7A-ARI-0130",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H47",
+   "terms": [
+    "BSD7A.R47.ptd_domestic",
+    "BSD7A.R47.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H47 follows the template formula =F47+G47"
+  },
+  {
+   "id": "BSD7A-ARI-0131",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E48",
+   "terms": [
+    "BSD7A.R48.month_domestic",
+    "BSD7A.R48.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E48 follows the template formula =C48+D48"
+  },
+  {
+   "id": "BSD7A-ARI-0132",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H48",
+   "terms": [
+    "BSD7A.R48.ptd_domestic",
+    "BSD7A.R48.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H48 follows the template formula =F48+G48"
+  },
+  {
+   "id": "BSD7A-ARI-0133",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E49",
+   "terms": [
+    "BSD7A.R49.month_domestic",
+    "BSD7A.R49.month_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!E49 follows the template formula =C49+D49"
+  },
+  {
+   "id": "BSD7A-ARI-0134",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H49",
+   "terms": [
+    "BSD7A.R49.ptd_domestic",
+    "BSD7A.R49.ptd_foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!H49 follows the template formula =F49+G49"
+  },
+  {
+   "id": "BSD7A-ARI-0135",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C50",
+   "terms": [
+    "BSD7A!C46",
+    "BSD7A.R47.month_domestic",
+    "BSD7A.R48.month_domestic",
+    "BSD7A.R49.month_domestic"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD7A!C50 follows the template formula =SUM(C46:C49)"
+  },
+  {
+   "id": "BSD7A-ARI-0136",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D50",
+   "terms": [
+    "BSD7A!D46",
+    "BSD7A.R47.month_foreign",
+    "BSD7A.R48.month_foreign",
+    "BSD7A.R49.month_foreign"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD7A!D50 follows the template formula =SUM(D46:D49)"
+  },
+  {
+   "id": "BSD7A-ARI-0137",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!E50",
+   "terms": [
+    "BSD7A!E46",
+    "BSD7A!E47",
+    "BSD7A!E48",
+    "BSD7A!E49"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD7A!E50 follows the template formula =SUM(E46:E49)"
+  },
+  {
+   "id": "BSD7A-ARI-0138",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!F50",
+   "terms": [
+    "BSD7A!F46",
+    "BSD7A.R47.ptd_domestic",
+    "BSD7A.R48.ptd_domestic",
+    "BSD7A.R49.ptd_domestic"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD7A!F50 follows the template formula =SUM(F46:F49)"
+  },
+  {
+   "id": "BSD7A-ARI-0139",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!G50",
+   "terms": [
+    "BSD7A!G46",
+    "BSD7A.R47.ptd_foreign",
+    "BSD7A.R48.ptd_foreign",
+    "BSD7A.R49.ptd_foreign"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD7A!G50 follows the template formula =SUM(G46:G49)"
+  },
+  {
+   "id": "BSD7A-ARI-0140",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!H50",
+   "terms": [
+    "BSD7A!H46",
+    "BSD7A!H47",
+    "BSD7A!H48",
+    "BSD7A!H49"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD7A!H50 follows the template formula =SUM(H46:H49)"
+  },
+  {
+   "id": "BSD7A-ARI-0141",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C66",
+   "terms": [
+    "BSD7A.R63.quarter",
+    "BSD7A.R64.quarter",
+    "BSD7A.R65.quarter"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7A!C66 follows the template formula =C63+C64+C65"
+  },
+  {
+   "id": "BSD7A-ARI-0142",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D66",
+   "terms": [
+    "BSD7A.R63.ptd",
+    "BSD7A.R64.ptd",
+    "BSD7A.R65.ptd"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7A!D66 follows the template formula =D63+D64+D65"
+  },
+  {
+   "id": "BSD7A-ARI-0143",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C71",
+   "terms": [
+    "BSD7A.R68.quarter",
+    "BSD7A.R69.quarter",
+    "BSD7A.R70.quarter"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7A!C71 follows the template formula =C68+C69+C70"
+  },
+  {
+   "id": "BSD7A-ARI-0144",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D71",
+   "terms": [
+    "BSD7A.R68.ptd",
+    "BSD7A.R69.ptd",
+    "BSD7A.R70.ptd"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7A!D71 follows the template formula =D68+D69+D70"
+  },
+  {
+   "id": "BSD7A-ARI-0145",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!C72",
+   "terms": [
+    "BSD7A!C66",
+    "BSD7A!C71"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!C72 follows the template formula =C66+C71"
+  },
+  {
+   "id": "BSD7A-ARI-0146",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7A!D72",
+   "terms": [
+    "BSD7A!D66",
+    "BSD7A!D71"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7A!D72 follows the template formula =D66+D71"
+  }
+ ]
+}

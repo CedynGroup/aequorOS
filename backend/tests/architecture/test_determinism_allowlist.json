@@ -410,9 +410,6 @@
   "tests/notifications/api/test_notification_authorization_integration.py": {
     "AQPY001": 2
   },
-  "tests/notifications/service/test_notification_email_mirror_integration.py": {
-    "AQPY001": 1
-  },
   "tests/operator/test_audit_api_integration.py": {
     "AQPY001": 1
   },

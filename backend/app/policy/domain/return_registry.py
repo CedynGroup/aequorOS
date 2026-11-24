@@ -58,7 +58,7 @@ type ReturnFrequency = Literal["weekly", "monthly", "quarterly", "semiannual", "
 # because the ICAAP report and update are filed through the portal API
 # (founder determination 2026-09-20); a narrower local alias silently made
 # those entries a type error.
-type ChannelCode = Literal["orass_api", "orass_sandbox", "email", "manual"]
+type ChannelCode = Literal["orass_api", "orass_sandbox", "reporting_gateway", "email", "manual"]
 type FilingFormat = Literal["xlsx", "csv", "pdf"]
 #: What a return IS within a filing, as opposed to what it contains. An
 #: ``obligation`` is filed in its own right; an ``annex`` is carried inside its
@@ -231,10 +231,9 @@ class ReturnDefinition:
     declared_methodologies: tuple[tuple[str, str], ...] = ()
     # A working workbook carries recalculable formulas. It is separately
     # labelled and never signed. Whether it is also FILED depends on the
-    # generator, not on this flag: only ``bog_form`` returns file theirs
-    # (workflow.WORKING_ARTIFACT_FILING_GENERATORS, founder decision
-    # 2026-09-20, which named BoG's own workbook). A generator whose working
-    # copy is an AequorOS calculation sheet keeps it internal.
+    # generator (workflow.WORKING_ARTIFACT_FILING_GENERATORS): since the
+    # founder decision of 2026-11-23 every generator with a formula workbook
+    # files it, so the regulator receives the Excel with formulas.
     supports_working_copy: bool = False
     # --- filing composition and governed timing (ICAAP P3) ----------------
     # What this return is WITHIN a filing. An ``annex``/``companion`` names its
@@ -409,6 +408,9 @@ REGISTRY: dict[str, ReturnDefinition] = {
         # capital engine). Stored return_code values migrated (202608150013).
         ReturnDefinition(
             code="CAR-RWA",
+            # Formula workbook: the report sheets plus a calculation sheet that
+            # recomputes every figure with live formulas (founder decision 2026-11-23).
+            supports_working_copy=True,
             limit_parameters=("car_min", "cet1_min", "tier1_min", "leverage_min"),
             effective_from=date(2019, 1, 1),
             source_url="https://www.bog.gov.gh/reg_directives/capital-requirement-directive/",
@@ -499,6 +501,9 @@ REGISTRY: dict[str, ReturnDefinition] = {
         ),
         ReturnDefinition(
             code="FX-NOP",
+            # Formula workbook: the report sheets plus a calculation sheet that
+            # recomputes every figure with live formulas (founder decision 2026-11-23).
+            supports_working_copy=True,
             source_url="https://www.bog.gov.gh/wp-content/uploads/2026/02/BG-FMD-2026-07-Revised-Directive-on-Foreign-Exchange-FX-PositionLimits-1.pdf",
             family="fx",
             title="Net Open Position Return (Monthly Summary)",

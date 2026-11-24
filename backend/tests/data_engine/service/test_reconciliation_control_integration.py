@@ -18,6 +18,7 @@ What these tests pin, in the order the audit raised it:
 
 from __future__ import annotations
 
+import os
 from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
@@ -36,7 +37,8 @@ from app.data_engine.service import reconciliation
 from app.domain.authority.outcomes import NotComputable, OutcomeState
 from app.liquidity.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
 from app.liquidity.service import regulatory_liquidity
-from app.live.service import live_view, pipeline
+from app.live import position_book
+from app.live.service import fact_derivation, live_view, pipeline
 from app.live.service.fact_derivation import (
     DerivationError,
     ReconciliationBlockedError,
@@ -559,6 +561,112 @@ def test_filing_gate_passes_a_balanced_book(db_session: Session) -> None:
     )
     assert outcome.blocks_filing is False
     assert outcome.status == "within_tolerance"
+
+
+#: The database-summed path runs on PostgreSQL only; SQLite takes the row-by-row path.
+_postgres_only = pytest.mark.skipif(
+    not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required"
+)
+
+
+def _seed_reading_cases(
+    db_session: Session, cases: list[tuple[str, str, str, dict[str, object]]]
+) -> None:
+    """Add ``(position_type, currency, balance, attributes)`` rows from a second source."""
+    batch = IngestionBatch(
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        source_system="API_PUSH",
+        adapter_version="1.0",
+        extraction_mode="full",
+        status="accepted",
+        as_of_date=FIXTURE_AS_OF,
+    )
+    db_session.add(batch)
+    db_session.flush()
+    lineage = LineageRecord(
+        organization_id=ORG_1,
+        bank_id=batch.bank_id,
+        ingestion_batch_id=batch.id,
+        operation_type="ADAPTER_TRANSLATE",
+        operation_ref="reading-cases",
+        input_lineage_ids=[],
+    )
+    db_session.add(lineage)
+    db_session.flush()
+    common = {
+        "organization_id": ORG_1,
+        "bank_id": SAMPLE_BANK_ID,
+        "as_of_date": FIXTURE_AS_OF,
+        "source_system": "API_PUSH",
+        "ingestion_batch_id": batch.id,
+        "lineage_id": lineage.id,
+        "validation_status": "accepted",
+    }
+    for index, (position_type, currency, balance, attributes) in enumerate(cases):
+        reference = f"READING/{index}"
+        position = CanonicalPosition(
+            **common, source_reference=reference, position_type=position_type, currency=currency
+        )
+        db_session.add(position)
+        db_session.flush()
+        db_session.add(
+            CanonicalPositionSnapshot(
+                **common,
+                source_reference=reference,
+                position_id=position.id,
+                balance=Decimal(balance),
+                attributes=attributes,
+            )
+        )
+    db_session.flush()
+
+
+@_postgres_only
+def test_balance_identity_totals_match_book(db_session: Session) -> None:
+    """The database-summed identity equals the row-by-row balance-sheet block.
+
+    On top of the fixture's whole book (split deposits, sovereign and other
+    securities, GL coverage, the equity line), each way a row states its
+    reporting-currency amount: a JSON number, a string, the row's own balance
+    when it is already in the reporting currency, and nothing at all for a
+    foreign-currency row without a conversion.
+    """
+    _seed_book(db_session)
+    _seed_reading_cases(
+        db_session,
+        [
+            ("LOAN", "GHS", "1234.5", {"balance_ghs": 1234.5}),
+            ("LOAN", "GHS", "1", {"balance_ghs": 98765432101}),
+            ("SECURITY_HOLDING", "GHS", "2500.25", {"balance_ghs": "2500.25"}),
+            ("DEPOSIT", "GHS", "700.10", {}),
+            ("DEPOSIT", "GHS", "300", {"balance_ghs": None}),
+            ("DEPOSIT", "USD", "50", {}),
+            ("INTERBANK_BORROWING", "USD", "40", {"balance_ghs": "612.4"}),
+        ],
+    )
+    bank = _bank(db_session)
+    fast = fact_derivation.evaluate_balance_identity(db_session, _ctx(), bank, FIXTURE_AS_OF)
+    book = fact_derivation._identity_from_book(db_session, _ctx(), bank, FIXTURE_AS_OF)  # noqa: SLF001
+    assert fast is not None
+    assert book is not None
+    assert (fast.assets, fast.funding, fast.gap, fast.status) == (
+        book.assets,
+        book.funding,
+        book.gap,
+        book.status,
+    )
+
+
+@_postgres_only
+def test_unreadable_balance_falls_back_to_the_book(db_session: Session) -> None:
+    """An amount the database cannot read as Python would defers to the row-by-row path."""
+    _seed_book(db_session)
+    _seed_reading_cases(db_session, [("LOAN", "GHS", "1", {"balance_ghs": "1,200.00"})])
+    bank = _bank(db_session)
+    assert (
+        position_book.stated_totals_by_type(db_session, _ctx(), bank, FIXTURE_AS_OF, "GHS") is None
+    )
 
 
 def test_live_plane_materialises_but_reports_the_block(db_session: Session) -> None:

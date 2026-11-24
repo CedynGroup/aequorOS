@@ -638,6 +638,28 @@ Shows data engines, connections and background jobs.
   `GET /operator/v1/data-engines`, `GET /operator/v1/jobs`,
   `GET /operator/v1/worker-health`.
 
+### Console Reporting Gateway
+
+Lists and enrols the institutions on the AequorOS Reporting Gateway.
+
+- **Reach**: sign in with operator administration authority and open
+  `/reporting-gateway` (**Reporting Gateway** in the rail).
+- **Control**: enrol an institution that files with its own software by code, name
+  and type; open its page to relay its certificate request and public signing keys,
+  or retire a signing key. AequorOS client banks are enrolled from their tenant page
+  instead, under **AequorOS Reporting Gateway**.
+- **Check**: an enrolled institution is listed with its code and, for an AequorOS
+  bank, the bank it belongs to; the audit log records
+  `reporting_gateway.institutions_read` and each enrolment act.
+- **Traps**: needs `REPORTING_GATEWAY_URL` and `REPORTING_GATEWAY_OPERATOR_DIR` on the
+  operator API and a running gateway; without them every call says enrolment is not
+  configured. Enrolment writes to the gateway's own database.
+- **Depends on**: pages `/reporting-gateway`, `/reporting-gateway/[code]`; operator
+  API `GET /operator/v1/reporting-gateway/institutions`,
+  `POST /operator/v1/reporting-gateway/institutions`; files
+  `console/app/(shell)/(developer)/reporting-gateway/page.tsx`,
+  `backend/app/operator/api/reporting_gateway_institutions.py`.
+
 ## Bank dashboard
 
 The authenticated bank product UI in `backend/dashboard/` on :3001. Every figure

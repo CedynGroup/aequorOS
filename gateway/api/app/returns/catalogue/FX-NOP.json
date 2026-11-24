@@ -1,0 +1,208 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "FX-NOP",
+ "name": "Net Open Position Return (Monthly Summary)",
+ "cadence": "monthly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-fx-nop-v1",
+  "fidelity": "REPRESENTATIVE",
+  "workbook": null
+ },
+ "sections": [
+  {
+   "code": "currency_positions",
+   "title": "Net Open Position by Currency",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "side",
+     "label": "Long / Short",
+     "kind": "text",
+     "unit": "units"
+    },
+    {
+     "key": "net_ccy",
+     "label": "Net Position (FCY)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "spot_ghs",
+     "label": "BoG End-of-Day Rate (GHS)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "value",
+     "label": "Net Position (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "abs_pct_tier1",
+     "label": "|NOP| / NOF (%)",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "within_single_limit",
+     "label": "Within 0% to −10% Limit",
+     "kind": "text",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "standalone_var",
+   "title": "Standalone VaR by Currency",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "net_ghs",
+     "label": "Net Position (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "value",
+     "label": "Standalone VaR (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "hedges",
+   "title": "Hedge Effectiveness",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "MTM (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "prospective_r2_pct",
+     "label": "Prospective R² (%)",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "dollar_offset_pct",
+     "label": "Dollar Offset (%)",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "effective",
+     "label": "Effective",
+     "kind": "text",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "scenario_nop",
+   "title": "NOP under Depreciation Scenarios",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "shock_pct",
+     "label": "Shock (%)",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "value",
+     "label": "NOP (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "nop_pct_tier1",
+     "label": "NOP / NOF (%)",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "within_aggregate_limit",
+     "label": "Within 20% Aggregate Limit",
+     "kind": "text",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "nop_summary",
+   "title": "Net Open Position Summary",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Value (GHS '000 / %)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "totals",
+   "title": "Headline totals",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Value",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "FX-NOP-STR-001",
+   "severity": "error",
+   "kind": "present",
+   "section": "currency_positions",
+   "description": "Net Open Position by Currency is reported"
+  },
+  {
+   "id": "FX-NOP-STR-002",
+   "severity": "error",
+   "kind": "present",
+   "section": "standalone_var",
+   "description": "Standalone VaR by Currency is reported"
+  },
+  {
+   "id": "FX-NOP-STR-003",
+   "severity": "error",
+   "kind": "present",
+   "section": "scenario_nop",
+   "description": "NOP under Depreciation Scenarios is reported"
+  },
+  {
+   "id": "FX-NOP-STR-004",
+   "severity": "error",
+   "kind": "present",
+   "section": "nop_summary",
+   "description": "Net Open Position Summary is reported"
+  }
+ ]
+}

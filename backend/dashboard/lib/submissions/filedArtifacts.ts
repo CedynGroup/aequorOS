@@ -39,7 +39,7 @@ const ROLE_BY_KIND: Record<string, FiledRole> = {
 export const FILED_ROLE_LABEL: Record<FiledRole, string> = {
   signed_record: 'Signed record of truth',
   official_copy: 'Official layout, values only',
-  formula_copy: 'Formula copy — not the signed record',
+  formula_copy: 'Excel with the template’s live formulas — recalculates when opened',
   data: 'Machine-readable sections',
 };
 

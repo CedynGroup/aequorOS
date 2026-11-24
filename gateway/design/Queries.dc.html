@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Queries and resubmission requests</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#F4F6F8}
+a{color:#1F4FD1}a:hover{color:#163A9C}
+</style>
+</helmet>
+<div style="box-sizing: border-box; min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6F8; color: #0E1726; font-family: Inter, system-ui, sans-serif">
+<div style="flex: 1 1 248px; max-width: 100%; background: #0F1E36; display: flex">
+<dc-import name="Sidebar" active="queries" hint-size="100%,1000px"></dc-import>
+</div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; padding: 28px 32px 48px">
+<header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #4B5565">Supervision / Queries</span>
+<h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.01em">Queries and resubmission requests</h1>
+<span style="font-size: 14px; color: #4B5565">Questions to institutions about their filings, delivered through the API and the institution portal</span>
+</div>
+<button type="button" style="height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: #1F4FD1; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600">New query</button>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<section aria-label="Threads" style="flex: 1 1 340px; min-width: 0; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; display: flex; flex-direction: column">
+<nav aria-label="Thread status" style="display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 10px 0; border-bottom: 1px solid #DDE2E8">
+<sc-for list="{{tabs}}" as="tab" hint-placeholder-count="4">
+<a href="Queries.dc.html" aria-current="{{tab.current}}" style="{{tab.style}}">{{tab.label}} · {{tab.count}}</a>
+</sc-for>
+</nav>
+<ul style="list-style: none; margin: 0; padding: 0">
+<sc-for list="{{threads}}" as="thread" hint-placeholder-count="7">
+<li style="{{thread.rowStyle}}">
+<a href="Queries.dc.html" aria-current="{{thread.current}}" style="display: flex; flex-direction: column; gap: 6px; padding: 14px 18px; text-decoration: none; color: #0E1726">
+<span style="display: flex; justify-content: space-between; gap: 10px; align-items: center">
+<span style="font-size: 14px; font-weight: 600">{{thread.institution}}</span>
+<span style="font-size: 12px; color: #4B5565; white-space: nowrap">{{thread.when}}</span>
+</span>
+<span style="font-size: 14px; color: #344054; line-height: 1.4">{{thread.subject}}</span>
+<span style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+<span style="{{thread.chip}}">{{thread.status}}</span>
+<span style="font-size: 12px; color: #4B5565">{{thread.kind}} · <span style="font-family: 'IBM Plex Mono', monospace">{{thread.ret}}</span></span>
+<span style="font-size: 12px; color: #4B5565">{{thread.due}}</span>
+</span>
+</a>
+</li>
+</sc-for>
+</ul>
+</section>
+
+<section aria-labelledby="thread-title" style="flex: 2 1 560px; min-width: 0; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; display: flex; flex-direction: column">
+<div style="padding: 20px 22px; border-bottom: 1px solid #EEF0F3; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: flex-start">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h2 id="thread-title" style="margin: 0; font-size: 19px; font-weight: 600">Basis for two upgraded facilities in BSD8</h2>
+<span style="font-size: 14px; color: #344054">Riverbend Rural Bank · query on <a href="Submission.dc.html" style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">SRG-26-0114702</a> · BSD8, 31 Oct 2026</span>
+</div>
+<span style="display: inline-flex; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; background: #EFEAFE; color: #5B35C2">Awaiting institution</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: #4B5565">
+<span>Opened by K. Owusu, 21 Nov 2026, 11:30</span>
+<span>Reply due <strong style="font-weight: 600; color: #0E1726">24 Nov 2026, 17:00</strong></span>
+<span>Delivered to the institution’s system 11:31 · acknowledged</span>
+</div>
+</div>
+
+<ol style="list-style: none; margin: 0; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px">
+<li style="display: flex; gap: 12px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 36px; height: 36px; border-radius: 999px; background: #1F4FD1; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600">KO</span>
+<div style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 6px; min-width: 0">
+<span style="font-size: 13px; color: #4B5565"><strong style="font-weight: 600; color: #0E1726">Kofi Owusu</strong> · Supervisor · 21 Nov, 11:30</span>
+<div style="background: #F4F6F8; border-radius: 10px; padding: 14px 16px; font-size: 14px; line-height: 1.6; color: #0E1726; display: flex; flex-direction: column; gap: 10px">
+<p style="margin: 0">Two facilities classified Substandard in September are reported as Current in this return: references RB-LN-20417 and RB-LN-20983, together GHS 1.9m.</p>
+<p style="margin: 0">Please provide the basis for each upgrade, the repayment record since 30 Sep 2026 and the credit committee minute that approved the change.</p>
+</div>
+</div>
+</li>
+<li style="display: flex; gap: 12px; align-items: center; padding-left: 48px; font-size: 13px; color: #4B5565">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4B5565" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l4 4L19 6"></path></svg>
+<span>Delivered via API at 11:31 and acknowledged by the institution’s system · also shown in its portal inbox</span>
+</li>
+<li style="display: flex; gap: 12px">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 36px; height: 36px; border-radius: 999px; background: #EEF0F3; color: #344054; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600">RB</span>
+<div style="flex: 1 1 auto; display: flex; flex-direction: column; gap: 6px; min-width: 0">
+<span style="font-size: 13px; color: #4B5565"><strong style="font-weight: 600; color: #0E1726">Riverbend Rural Bank</strong> · Compliance Officer · 21 Nov, 15:02</span>
+<div style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 14px 16px; font-size: 14px; line-height: 1.6; color: #0E1726">Acknowledged. The credit committee minute and repayment schedules are being collated; we will respond in full before the deadline.</div>
+</div>
+</li>
+</ol>
+
+<form aria-label="Reply" style="margin-top: auto; border-top: 1px solid #EEF0F3; padding: 18px 22px 22px; display: flex; flex-direction: column; gap: 12px">
+<label for="reply" style="font-size: 13px; font-weight: 600; color: #344054">Add to this query</label>
+<textarea id="reply" rows="4" placeholder="Write to the institution. They receive it through the API and in the institution portal." style="box-sizing: border-box; width: 100%; border: 1px solid #C9D1DB; border-radius: 8px; padding: 12px 14px; font: inherit; font-size: 14px; line-height: 1.5; resize: vertical"></textarea>
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between">
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center">
+<label style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #344054; min-height: 44px"><input type="checkbox" style="width: 18px; height: 18px">Require a corrected filing (resubmission)</label>
+<label style="display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #344054">Reply due <input type="date" value="2026-11-24" style="height: 40px; border: 1px solid #C9D1DB; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 14px"></label>
+</div>
+<div style="display: flex; gap: 10px; flex-wrap: wrap">
+<button type="button" style="height: 44px; padding: 0 16px; border: 1px solid #C9D1DB; border-radius: 8px; background: #FFFFFF; color: #0E1726; font: inherit; font-size: 14px; font-weight: 500">Attach file</button>
+<button type="button" style="height: 44px; padding: 0 16px; border: 1px solid #C9D1DB; border-radius: 8px; background: #FFFFFF; color: #0E1726; font: inherit; font-size: 14px; font-weight: 500">Close query</button>
+<button type="button" style="height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: #1F4FD1; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600">Send to institution</button>
+</div>
+</div>
+</form>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const tabBase = 'display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; font-size: 13px; text-decoration: none; margin-bottom: -1px; ';
+    const tabs = [['Open', '7', true], ['Awaiting institution', '5', false], ['Awaiting supervisor', '2', false], ['Closed', '64', false]].map(([label, count, on]) => ({
+      label, count,
+      current: on ? 'page' : 'false',
+      style: tabBase + (on ? 'color: #0E1726; font-weight: 600; border-bottom: 2px solid #1F4FD1' : 'color: #4B5565; font-weight: 500; border-bottom: 2px solid transparent')
+    }));
+    const chipBase = 'display: inline-flex; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 9px; ';
+    const chips = {
+      'Awaiting institution': 'background: #EFEAFE; color: #5B35C2',
+      'Awaiting supervisor': 'background: #E6EEFC; color: #1F4FD1',
+      Overdue: 'background: #FBE7E7; color: #A12A2A'
+    };
+    const threads = [
+      ['Riverbend Rural Bank', '11:30', 'Basis for two upgraded facilities in BSD8', 'Awaiting institution', 'Query', 'BSD8', 'Due 24 Nov', true],
+      ['Northgate Savings & Loans', 'Yesterday', 'BSD2 fails 2 cross-checks against BSD5A', 'Awaiting supervisor', 'Resubmission', 'BSD2', 'Refiled today', false],
+      ['Harbourline Bank', 'Yesterday', 'LMT Table 4 does not reconcile to Table 1', 'Awaiting institution', 'Resubmission', 'LMT', 'Due 25 Nov', false],
+      ['Kestrel Bank', '18 Nov', 'Explain FX swap volumes in BSD13', 'Overdue', 'Query', 'BSD13', '2 days overdue', false],
+      ['Cedarwood Bank', '17 Nov', 'NPL ratio movement in September', 'Awaiting institution', 'Query', 'NPL-MONTHLY', 'Due 26 Nov', false],
+      ['Summit Mutual Bank', '17 Nov', 'Large exposure to one connected group', 'Awaiting supervisor', 'Query', 'LE-MONTHLY', 'Reply received', false],
+      ['Savanna Union Bank', '15 Nov', 'Late BSD13: confirm controls remediation', 'Awaiting institution', 'Query', 'BSD13', 'Due 28 Nov', false]
+    ].map(([institution, when, subject, status, kind, ret, due, on]) => ({
+      institution, when, subject, status, kind, ret, due,
+      current: on ? 'true' : 'false',
+      chip: chipBase + chips[status],
+      rowStyle: 'border-bottom: 1px solid #EEF0F3; ' + (on ? 'background: #F2F6FE' : 'background: #FFFFFF')
+    }));
+    return { tabs, threads };
+  }
+}
+</script>
+</body>
+</html>

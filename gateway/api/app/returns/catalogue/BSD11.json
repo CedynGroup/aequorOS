@@ -1,0 +1,2401 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD11",
+ "name": "Statutory Return",
+ "cadence": "semiannual",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd11-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD11 REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_bsd11_sheet_1",
+   "title": "BSD11-Sheet-1",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD11.S1.R12.previous",
+     "label": "Granted to firms in which directors are interested — previous",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R12.granted",
+     "label": "Granted to firms in which directors are interested — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R12.repaid",
+     "label": "Granted to firms in which directors are interested — repaid",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R12.written_off",
+     "label": "Granted to firms in which directors are interested — written off",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R12.current",
+     "label": "Granted to firms in which directors are interested — current",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R13.previous",
+     "label": "Granted to Directors — previous",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R13.granted",
+     "label": "Granted to Directors — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R13.repaid",
+     "label": "Granted to Directors — repaid",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R13.written_off",
+     "label": "Granted to Directors — written off",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R13.current",
+     "label": "Granted to Directors — current",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R14.previous",
+     "label": "Granted to Officers — previous",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R14.granted",
+     "label": "Granted to Officers — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R14.repaid",
+     "label": "Granted to Officers — repaid",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R14.written_off",
+     "label": "Granted to Officers — written off",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R14.current",
+     "label": "Granted to Officers — current",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R15.previous",
+     "label": "Granted to other Employees — previous",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R15.granted",
+     "label": "Granted to other Employees — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R15.repaid",
+     "label": "Granted to other Employees — repaid",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R15.written_off",
+     "label": "Granted to other Employees — written off",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S1.R15.current",
+     "label": "Granted to other Employees — current",
+     "kind": "value"
+    }
+   ]
+  },
+  {
+   "code": "sheet_bsd11_sheet_2",
+   "title": "BSD11-Sheet-2",
+   "unit": "count",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD11.S2.R8.name",
+     "label": "1. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R8.appointed",
+     "label": "1. — appointed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R8.employment",
+     "label": "1. — employment",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R8.shares",
+     "label": "1. — shares",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R8.interests",
+     "label": "1. — interests",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R9.name",
+     "label": "2. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R9.appointed",
+     "label": "2. — appointed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R9.employment",
+     "label": "2. — employment",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R9.shares",
+     "label": "2. — shares",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R9.interests",
+     "label": "2. — interests",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R10.name",
+     "label": "3. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R10.appointed",
+     "label": "3. — appointed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R10.employment",
+     "label": "3. — employment",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R10.shares",
+     "label": "3. — shares",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R10.interests",
+     "label": "3. — interests",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R11.name",
+     "label": "4. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R11.appointed",
+     "label": "4. — appointed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R11.employment",
+     "label": "4. — employment",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R11.shares",
+     "label": "4. — shares",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R11.interests",
+     "label": "4. — interests",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R12.name",
+     "label": "5. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R12.appointed",
+     "label": "5. — appointed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R12.employment",
+     "label": "5. — employment",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R12.shares",
+     "label": "5. — shares",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R12.interests",
+     "label": "5. — interests",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R13.name",
+     "label": "6. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R13.appointed",
+     "label": "6. — appointed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R13.employment",
+     "label": "6. — employment",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R13.shares",
+     "label": "6. — shares",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S2.R13.interests",
+     "label": "6. — interests",
+     "kind": "value"
+    }
+   ]
+  },
+  {
+   "code": "sheet_bsd11_sheet_3",
+   "title": "BSD11-Sheet-3",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD11.S3.R10.particulars",
+     "label": "2. — particulars",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R10.secured",
+     "label": "2. — secured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R10.unsecured",
+     "label": "2. — unsecured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R10.security",
+     "label": "2. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R10.facility_type",
+     "label": "2. — facility type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R10.balance",
+     "label": "2. — balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R10.granted",
+     "label": "2. — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R11.particulars",
+     "label": "3. — particulars",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R11.secured",
+     "label": "3. — secured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R11.unsecured",
+     "label": "3. — unsecured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R11.security",
+     "label": "3. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R11.facility_type",
+     "label": "3. — facility type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R11.balance",
+     "label": "3. — balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R11.granted",
+     "label": "3. — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R12.particulars",
+     "label": "4. — particulars",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R12.secured",
+     "label": "4. — secured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R12.unsecured",
+     "label": "4. — unsecured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R12.security",
+     "label": "4. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R12.facility_type",
+     "label": "4. — facility type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R12.balance",
+     "label": "4. — balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R12.granted",
+     "label": "4. — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R13.particulars",
+     "label": "5. — particulars",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R13.secured",
+     "label": "5. — secured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R13.unsecured",
+     "label": "5. — unsecured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R13.security",
+     "label": "5. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R13.facility_type",
+     "label": "5. — facility type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R13.balance",
+     "label": "5. — balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R13.granted",
+     "label": "5. — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R14.particulars",
+     "label": "6. — particulars",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R14.secured",
+     "label": "6. — secured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R14.unsecured",
+     "label": "6. — unsecured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R14.security",
+     "label": "6. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R14.facility_type",
+     "label": "6. — facility type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R14.balance",
+     "label": "6. — balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.R14.granted",
+     "label": "6. — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.total.R15.secured",
+     "label": "TOTAL — secured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.total.R15.unsecured",
+     "label": "TOTAL — unsecured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S3.total.R15.balance",
+     "label": "TOTAL — balance",
+     "kind": "value"
+    }
+   ]
+  },
+  {
+   "code": "sheet_bsd11_sheet_4",
+   "title": "BSD11-Sheet-4",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD11.S4.R12.name",
+     "label": "1. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R12.secured",
+     "label": "1. — secured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R12.unsecured",
+     "label": "1. — unsecured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R12.guaranteed",
+     "label": "1. — guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R12.security",
+     "label": "1. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.rate.R12.rate",
+     "label": "1.",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S4.R12.facility_type",
+     "label": "1. — facility type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R12.approved",
+     "label": "1. — approved",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R12.balance",
+     "label": "1. — balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R13.name",
+     "label": "2. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R13.secured",
+     "label": "2. — secured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R13.unsecured",
+     "label": "2. — unsecured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R13.guaranteed",
+     "label": "2. — guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R13.security",
+     "label": "2. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.rate.R13.rate",
+     "label": "2.",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S4.R13.facility_type",
+     "label": "2. — facility type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R13.approved",
+     "label": "2. — approved",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R13.balance",
+     "label": "2. — balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R14.name",
+     "label": "3. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R14.secured",
+     "label": "3. — secured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R14.unsecured",
+     "label": "3. — unsecured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R14.guaranteed",
+     "label": "3. — guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R14.security",
+     "label": "3. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.rate.R14.rate",
+     "label": "3.",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S4.R14.facility_type",
+     "label": "3. — facility type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R14.approved",
+     "label": "3. — approved",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R14.balance",
+     "label": "3. — balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R15.name",
+     "label": "4. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R15.secured",
+     "label": "4. — secured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R15.unsecured",
+     "label": "4. — unsecured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R15.guaranteed",
+     "label": "4. — guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R15.security",
+     "label": "4. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.rate.R15.rate",
+     "label": "4.",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S4.R15.facility_type",
+     "label": "4. — facility type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R15.approved",
+     "label": "4. — approved",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R15.balance",
+     "label": "4. — balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R16.name",
+     "label": "5. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R16.secured",
+     "label": "5. — secured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R16.unsecured",
+     "label": "5. — unsecured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R16.guaranteed",
+     "label": "5. — guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R16.security",
+     "label": "5. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.rate.R16.rate",
+     "label": "5.",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S4.R16.facility_type",
+     "label": "5. — facility type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R16.approved",
+     "label": "5. — approved",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R16.balance",
+     "label": "5. — balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R17.name",
+     "label": "6. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R17.secured",
+     "label": "6. — secured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R17.unsecured",
+     "label": "6. — unsecured",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R17.guaranteed",
+     "label": "6. — guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R17.security",
+     "label": "6. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.rate.R17.rate",
+     "label": "6.",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S4.R17.facility_type",
+     "label": "6. — facility type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R17.approved",
+     "label": "6. — approved",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S4.R17.balance",
+     "label": "6. — balance",
+     "kind": "value"
+    }
+   ]
+  },
+  {
+   "code": "sheet_bsd11_sheet_5",
+   "title": "BSD11-Sheet-5",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD11.S5.R11.housing_no",
+     "label": "Category 1 — housing no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R11.housing_amount",
+     "label": "Category 1 — housing amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R11.vehicle_no",
+     "label": "Category 1 — vehicle no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R11.vehicle_amount",
+     "label": "Category 1 — vehicle amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R11.other_secured_no",
+     "label": "Category 1 — other secured no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R11.other_secured_amount",
+     "label": "Category 1 — other secured amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R11.unsecured_no",
+     "label": "Category 1 — unsecured no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R11.unsecured_amount",
+     "label": "Category 1 — unsecured amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R11.total_no",
+     "label": "Category 1 — total no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R11.total_amount",
+     "label": "Category 1 — total amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R12.housing_no",
+     "label": "Category 2 — housing no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R12.housing_amount",
+     "label": "Category 2 — housing amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R12.vehicle_no",
+     "label": "Category 2 — vehicle no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R12.vehicle_amount",
+     "label": "Category 2 — vehicle amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R12.other_secured_no",
+     "label": "Category 2 — other secured no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R12.other_secured_amount",
+     "label": "Category 2 — other secured amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R12.unsecured_no",
+     "label": "Category 2 — unsecured no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R12.unsecured_amount",
+     "label": "Category 2 — unsecured amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R12.total_no",
+     "label": "Category 2 — total no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R12.total_amount",
+     "label": "Category 2 — total amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R13.housing_no",
+     "label": "Category 3 etc. — housing no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R13.housing_amount",
+     "label": "Category 3 etc. — housing amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R13.vehicle_no",
+     "label": "Category 3 etc. — vehicle no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R13.vehicle_amount",
+     "label": "Category 3 etc. — vehicle amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R13.other_secured_no",
+     "label": "Category 3 etc. — other secured no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R13.other_secured_amount",
+     "label": "Category 3 etc. — other secured amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R13.unsecured_no",
+     "label": "Category 3 etc. — unsecured no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R13.unsecured_amount",
+     "label": "Category 3 etc. — unsecured amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R13.total_no",
+     "label": "Category 3 etc. — total no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R13.total_amount",
+     "label": "Category 3 etc. — total amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R17.housing_no",
+     "label": "Category 1 — housing no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R17.housing_amount",
+     "label": "Category 1 — housing amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R17.vehicle_no",
+     "label": "Category 1 — vehicle no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R17.vehicle_amount",
+     "label": "Category 1 — vehicle amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R17.other_secured_no",
+     "label": "Category 1 — other secured no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R17.other_secured_amount",
+     "label": "Category 1 — other secured amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R17.unsecured_no",
+     "label": "Category 1 — unsecured no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R17.unsecured_amount",
+     "label": "Category 1 — unsecured amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R17.total_no",
+     "label": "Category 1 — total no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R17.total_amount",
+     "label": "Category 1 — total amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R18.housing_no",
+     "label": "Category 2 — housing no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R18.housing_amount",
+     "label": "Category 2 — housing amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R18.vehicle_no",
+     "label": "Category 2 — vehicle no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R18.vehicle_amount",
+     "label": "Category 2 — vehicle amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R18.other_secured_no",
+     "label": "Category 2 — other secured no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R18.other_secured_amount",
+     "label": "Category 2 — other secured amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R18.unsecured_no",
+     "label": "Category 2 — unsecured no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R18.unsecured_amount",
+     "label": "Category 2 — unsecured amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R18.total_no",
+     "label": "Category 2 — total no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R18.total_amount",
+     "label": "Category 2 — total amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R19.housing_no",
+     "label": "Category 3 etc. — housing no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R19.housing_amount",
+     "label": "Category 3 etc. — housing amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R19.vehicle_no",
+     "label": "Category 3 etc. — vehicle no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R19.vehicle_amount",
+     "label": "Category 3 etc. — vehicle amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R19.other_secured_no",
+     "label": "Category 3 etc. — other secured no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R19.other_secured_amount",
+     "label": "Category 3 etc. — other secured amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R19.unsecured_no",
+     "label": "Category 3 etc. — unsecured no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R19.unsecured_amount",
+     "label": "Category 3 etc. — unsecured amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R19.total_no",
+     "label": "Category 3 etc. — total no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R19.total_amount",
+     "label": "Category 3 etc. — total amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R22.housing_no",
+     "label": "C. — housing no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R22.housing_amount",
+     "label": "C. — housing amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R22.vehicle_no",
+     "label": "C. — vehicle no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R22.vehicle_amount",
+     "label": "C. — vehicle amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R22.other_secured_no",
+     "label": "C. — other secured no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R22.other_secured_amount",
+     "label": "C. — other secured amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R22.unsecured_no",
+     "label": "C. — unsecured no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R22.unsecured_amount",
+     "label": "C. — unsecured amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R22.total_no",
+     "label": "C. — total no",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S5.R22.total_amount",
+     "label": "C. — total amount",
+     "kind": "value"
+    }
+   ]
+  },
+  {
+   "code": "sheet_bsd11_sheet_6",
+   "title": "BSD11-Sheet-6",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD11.S6.R8.name",
+     "label": "1. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R8.on_balance",
+     "label": "1. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R8.off_balance",
+     "label": "1. — off balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R8.total",
+     "label": "1. — total",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R8.security",
+     "label": "1. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.pct.R8.pct_secured",
+     "label": "1. — pct secured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R8.pct_unsecured",
+     "label": "1. — pct unsecured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R8.pct_total",
+     "label": "1. — pct total",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.R9.name",
+     "label": "2. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R9.on_balance",
+     "label": "2. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R9.off_balance",
+     "label": "2. — off balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R9.total",
+     "label": "2. — total",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R9.security",
+     "label": "2. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.pct.R9.pct_secured",
+     "label": "2. — pct secured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R9.pct_unsecured",
+     "label": "2. — pct unsecured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R9.pct_total",
+     "label": "2. — pct total",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.R10.name",
+     "label": "3. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R10.on_balance",
+     "label": "3. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R10.off_balance",
+     "label": "3. — off balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R10.total",
+     "label": "3. — total",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R10.security",
+     "label": "3. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.pct.R10.pct_secured",
+     "label": "3. — pct secured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R10.pct_unsecured",
+     "label": "3. — pct unsecured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R10.pct_total",
+     "label": "3. — pct total",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.R11.name",
+     "label": "4. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R11.on_balance",
+     "label": "4. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R11.off_balance",
+     "label": "4. — off balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R11.total",
+     "label": "4. — total",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R11.security",
+     "label": "4. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.pct.R11.pct_secured",
+     "label": "4. — pct secured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R11.pct_unsecured",
+     "label": "4. — pct unsecured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R11.pct_total",
+     "label": "4. — pct total",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.R12.name",
+     "label": "5. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R12.on_balance",
+     "label": "5. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R12.off_balance",
+     "label": "5. — off balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R12.total",
+     "label": "5. — total",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R12.security",
+     "label": "5. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.pct.R12.pct_secured",
+     "label": "5. — pct secured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R12.pct_unsecured",
+     "label": "5. — pct unsecured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R12.pct_total",
+     "label": "5. — pct total",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.R13.name",
+     "label": "6. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R13.on_balance",
+     "label": "6. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R13.off_balance",
+     "label": "6. — off balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R13.total",
+     "label": "6. — total",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R13.security",
+     "label": "6. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.pct.R13.pct_secured",
+     "label": "6. — pct secured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R13.pct_unsecured",
+     "label": "6. — pct unsecured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R13.pct_total",
+     "label": "6. — pct total",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.R14.name",
+     "label": "7. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R14.on_balance",
+     "label": "7. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R14.off_balance",
+     "label": "7. — off balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R14.total",
+     "label": "7. — total",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R14.security",
+     "label": "7. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.pct.R14.pct_secured",
+     "label": "7. — pct secured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R14.pct_unsecured",
+     "label": "7. — pct unsecured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R14.pct_total",
+     "label": "7. — pct total",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.R15.name",
+     "label": "8. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R15.on_balance",
+     "label": "8. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R15.off_balance",
+     "label": "8. — off balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R15.total",
+     "label": "8. — total",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R15.security",
+     "label": "8. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.pct.R15.pct_secured",
+     "label": "8. — pct secured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R15.pct_unsecured",
+     "label": "8. — pct unsecured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R15.pct_total",
+     "label": "8. — pct total",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.R16.name",
+     "label": "9. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R16.on_balance",
+     "label": "9. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R16.off_balance",
+     "label": "9. — off balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R16.total",
+     "label": "9. — total",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R16.security",
+     "label": "9. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.pct.R16.pct_secured",
+     "label": "9. — pct secured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R16.pct_unsecured",
+     "label": "9. — pct unsecured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R16.pct_total",
+     "label": "9. — pct total",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.R17.name",
+     "label": "10. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R17.on_balance",
+     "label": "10. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R17.off_balance",
+     "label": "10. — off balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R17.total",
+     "label": "10. — total",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.R17.security",
+     "label": "10. — security",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S6.pct.R17.pct_secured",
+     "label": "10. — pct secured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R17.pct_unsecured",
+     "label": "10. — pct unsecured",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S6.pct.R17.pct_total",
+     "label": "10. — pct total",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "sheet_bsd11_sheet_7",
+   "title": "BSD11-Sheet-7",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD11.S7.R9.customer",
+     "label": "1. — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R9.description",
+     "label": "1. — description",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R9.tenure",
+     "label": "1. — tenure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R9.acquired",
+     "label": "1. — acquired",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R9.advance",
+     "label": "1. — advance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R9.value",
+     "label": "1. — value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R9.forced_sale_value",
+     "label": "1. — forced sale value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R9.prior_lien",
+     "label": "1. — prior lien",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R9.net_income",
+     "label": "1. — net income",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R10.customer",
+     "label": "2. — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R10.description",
+     "label": "2. — description",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R10.tenure",
+     "label": "2. — tenure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R10.acquired",
+     "label": "2. — acquired",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R10.advance",
+     "label": "2. — advance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R10.value",
+     "label": "2. — value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R10.forced_sale_value",
+     "label": "2. — forced sale value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R10.prior_lien",
+     "label": "2. — prior lien",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R10.net_income",
+     "label": "2. — net income",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R11.customer",
+     "label": "3. — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R11.description",
+     "label": "3. — description",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R11.tenure",
+     "label": "3. — tenure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R11.acquired",
+     "label": "3. — acquired",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R11.advance",
+     "label": "3. — advance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R11.value",
+     "label": "3. — value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R11.forced_sale_value",
+     "label": "3. — forced sale value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R11.prior_lien",
+     "label": "3. — prior lien",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R11.net_income",
+     "label": "3. — net income",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R12.customer",
+     "label": "4. — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R12.description",
+     "label": "4. — description",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R12.tenure",
+     "label": "4. — tenure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R12.acquired",
+     "label": "4. — acquired",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R12.advance",
+     "label": "4. — advance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R12.value",
+     "label": "4. — value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R12.forced_sale_value",
+     "label": "4. — forced sale value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R12.prior_lien",
+     "label": "4. — prior lien",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R12.net_income",
+     "label": "4. — net income",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R13.customer",
+     "label": "5. — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R13.description",
+     "label": "5. — description",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R13.tenure",
+     "label": "5. — tenure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R13.acquired",
+     "label": "5. — acquired",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R13.advance",
+     "label": "5. — advance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R13.value",
+     "label": "5. — value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R13.forced_sale_value",
+     "label": "5. — forced sale value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R13.prior_lien",
+     "label": "5. — prior lien",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R13.net_income",
+     "label": "5. — net income",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R14.customer",
+     "label": "6. — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R14.description",
+     "label": "6. — description",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R14.tenure",
+     "label": "6. — tenure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R14.acquired",
+     "label": "6. — acquired",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R14.advance",
+     "label": "6. — advance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R14.value",
+     "label": "6. — value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R14.forced_sale_value",
+     "label": "6. — forced sale value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R14.prior_lien",
+     "label": "6. — prior lien",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R14.net_income",
+     "label": "6. — net income",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R15.customer",
+     "label": "7. — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R15.description",
+     "label": "7. — description",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R15.tenure",
+     "label": "7. — tenure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R15.acquired",
+     "label": "7. — acquired",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R15.advance",
+     "label": "7. — advance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R15.value",
+     "label": "7. — value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R15.forced_sale_value",
+     "label": "7. — forced sale value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R15.prior_lien",
+     "label": "7. — prior lien",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R15.net_income",
+     "label": "7. — net income",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R16.customer",
+     "label": "8. — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R16.description",
+     "label": "8. — description",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R16.tenure",
+     "label": "8. — tenure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R16.acquired",
+     "label": "8. — acquired",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R16.advance",
+     "label": "8. — advance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R16.value",
+     "label": "8. — value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R16.forced_sale_value",
+     "label": "8. — forced sale value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R16.prior_lien",
+     "label": "8. — prior lien",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S7.R16.net_income",
+     "label": "8. — net income",
+     "kind": "value"
+    }
+   ]
+  },
+  {
+   "code": "sheet_bsd11__sheet_8",
+   "title": "BSD11- Sheet 8",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD11.S8.serial.R8.serial",
+     "label": "row 8",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S8.R8.customer",
+     "label": "row 8 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R8.relationship",
+     "label": "row 8 — relationship",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R8.granted",
+     "label": "row 8 — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R8.security_type",
+     "label": "row 8 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R8.security_value",
+     "label": "row 8 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R8.expiry",
+     "label": "row 8 — expiry",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R8.outstanding",
+     "label": "row 8 — outstanding",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R8.classification",
+     "label": "row 8 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.serial.R9.serial",
+     "label": "row 9",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S8.R9.customer",
+     "label": "row 9 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R9.relationship",
+     "label": "row 9 — relationship",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R9.granted",
+     "label": "row 9 — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R9.security_type",
+     "label": "row 9 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R9.security_value",
+     "label": "row 9 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R9.expiry",
+     "label": "row 9 — expiry",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R9.outstanding",
+     "label": "row 9 — outstanding",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R9.classification",
+     "label": "row 9 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.serial.R10.serial",
+     "label": "row 10",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S8.R10.customer",
+     "label": "row 10 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R10.relationship",
+     "label": "row 10 — relationship",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R10.granted",
+     "label": "row 10 — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R10.security_type",
+     "label": "row 10 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R10.security_value",
+     "label": "row 10 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R10.expiry",
+     "label": "row 10 — expiry",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R10.outstanding",
+     "label": "row 10 — outstanding",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R10.classification",
+     "label": "row 10 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.serial.R11.serial",
+     "label": "row 11",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S8.R11.customer",
+     "label": "row 11 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R11.relationship",
+     "label": "row 11 — relationship",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R11.granted",
+     "label": "row 11 — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R11.security_type",
+     "label": "row 11 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R11.security_value",
+     "label": "row 11 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R11.expiry",
+     "label": "row 11 — expiry",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R11.outstanding",
+     "label": "row 11 — outstanding",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R11.classification",
+     "label": "row 11 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.serial.R12.serial",
+     "label": "row 12",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S8.R12.customer",
+     "label": "row 12 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R12.relationship",
+     "label": "row 12 — relationship",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R12.granted",
+     "label": "row 12 — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R12.security_type",
+     "label": "row 12 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R12.security_value",
+     "label": "row 12 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R12.expiry",
+     "label": "row 12 — expiry",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R12.outstanding",
+     "label": "row 12 — outstanding",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R12.classification",
+     "label": "row 12 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.serial.R13.serial",
+     "label": "row 13",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S8.R13.customer",
+     "label": "row 13 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R13.relationship",
+     "label": "row 13 — relationship",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R13.granted",
+     "label": "row 13 — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R13.security_type",
+     "label": "row 13 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R13.security_value",
+     "label": "row 13 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R13.expiry",
+     "label": "row 13 — expiry",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R13.outstanding",
+     "label": "row 13 — outstanding",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R13.classification",
+     "label": "row 13 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.serial.R14.serial",
+     "label": "row 14",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S8.R14.customer",
+     "label": "row 14 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R14.relationship",
+     "label": "row 14 — relationship",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R14.granted",
+     "label": "row 14 — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R14.security_type",
+     "label": "row 14 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R14.security_value",
+     "label": "row 14 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R14.expiry",
+     "label": "row 14 — expiry",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R14.outstanding",
+     "label": "row 14 — outstanding",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R14.classification",
+     "label": "row 14 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.serial.R15.serial",
+     "label": "row 15",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S8.R15.customer",
+     "label": "row 15 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R15.relationship",
+     "label": "row 15 — relationship",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R15.granted",
+     "label": "row 15 — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R15.security_type",
+     "label": "row 15 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R15.security_value",
+     "label": "row 15 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R15.expiry",
+     "label": "row 15 — expiry",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R15.outstanding",
+     "label": "row 15 — outstanding",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R15.classification",
+     "label": "row 15 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.serial.R16.serial",
+     "label": "row 16",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S8.R16.customer",
+     "label": "row 16 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R16.relationship",
+     "label": "row 16 — relationship",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R16.granted",
+     "label": "row 16 — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R16.security_type",
+     "label": "row 16 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R16.security_value",
+     "label": "row 16 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R16.expiry",
+     "label": "row 16 — expiry",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R16.outstanding",
+     "label": "row 16 — outstanding",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R16.classification",
+     "label": "row 16 — classification",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.serial.R17.serial",
+     "label": "row 17",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD11.S8.R17.customer",
+     "label": "row 17 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R17.relationship",
+     "label": "row 17 — relationship",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R17.granted",
+     "label": "row 17 — granted",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R17.security_type",
+     "label": "row 17 — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R17.security_value",
+     "label": "row 17 — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R17.expiry",
+     "label": "row 17 — expiry",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R17.outstanding",
+     "label": "row 17 — outstanding",
+     "kind": "value"
+    },
+    {
+     "code": "BSD11.S8.R17.classification",
+     "label": "row 17 — classification",
+     "kind": "value"
+    }
+   ]
+  }
+ ],
+ "rules": []
+}

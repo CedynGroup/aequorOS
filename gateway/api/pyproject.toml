@@ -1,0 +1,69 @@
+[project]
+name = "srg-gateway-api"
+version = "0.1.0"
+description = "Supervisory Reporting Gateway: institution filing API and supervisor API"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14",
+    "psycopg[binary]>=3.2",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.6",
+    "cryptography>=44",
+    "pyjwt[crypto]>=2.10",
+    "jsonschema>=4.23",
+    "python-multipart>=0.0.20",
+    "argon2-cffi>=23.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "httpx>=0.28",
+    "ruff>=0.8",
+    "basedpyright>=1.22",
+    "types-jsonschema>=4.23",
+    "httpx2>=2.16.2",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF", "PL", "PT", "TID"]
+ignore = [
+    "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR2004", "PLC0415",
+    "S101", "RUF001", "RUF002", "RUF003", "B008", "E501", "PLR0917",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S108", "S311", "S608", "PT012", "PT018", "RUF007", "PLW0108"]
+"scripts/**" = ["S310"]
+"app/seed/**" = ["S311"]
+
+[tool.basedpyright]
+include = ["app", "tests", "scripts", "alembic"]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+reportAny = "error"
+reportExplicitAny = "error"
+reportUnusedCallResult = "none"
+reportImplicitOverride = "none"
+reportMissingTypeStubs = "error"
+executionEnvironments = [
+    { root = "app", extraPaths = ["."] },
+    { root = "scripts", extraPaths = ["."] },
+    { root = "alembic", extraPaths = ["."] },
+    { root = "tests", extraPaths = ["."] },
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["error::DeprecationWarning:app.*"]

@@ -29,7 +29,7 @@ import { useState } from "react";
 import { AlertTriangle, Check, FlaskConical, Loader2 } from "lucide-react";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { submissionPortal } from "@/lib/format";
-import { fmtBytes } from "./shared";
+import { CHANNEL_LABELS, fmtBytes } from "./shared";
 import {
   ROLE_COPY,
   TONE_CLASS,
@@ -59,7 +59,9 @@ export default function TransmitConfirmDialog({
   onConfirm: () => void;
 }) {
   const [acknowledged, setAcknowledged] = useState(false);
-  const portal = portalName();
+  const viaGateway = preview.channel === "reporting_gateway";
+  const portal = viaGateway ? CHANNEL_LABELS.reporting_gateway : portalName();
+  const figures = preview.gatewayFigureCount;
 
   return (
     <div
@@ -91,14 +93,22 @@ export default function TransmitConfirmDialog({
         </div>
 
         <div className="grid grid-cols-3 gap-3 px-6 pt-4">
-          <Fact label="Channel" value={preview.channelLabel} note={portal} />
+          {viaGateway ? (
+            <Fact label="Channel" value={portal} note="A signed filing, receipted" />
+          ) : (
+            <Fact label="Channel" value={preview.channelLabel} note={portal} />
+          )}
           <Fact
             label="Reporting institution"
             value={preview.institutionCode ?? "Not recorded"}
             note={
-              preview.institutionCode
-                ? "From the institution profile"
-                : "Add it in the institution profile"
+              viaGateway
+                ? preview.institutionCode
+                  ? "As enrolled on the gateway"
+                  : "Not enrolled on the gateway"
+                : preview.institutionCode
+                  ? "From the institution profile"
+                  : "Add it in the institution profile"
             }
             mono={preview.institutionCode !== null}
           />
@@ -130,10 +140,25 @@ export default function TransmitConfirmDialog({
               What will be transmitted
             </h3>
             <p className="text-caption text-slate">
-              {filingSetCount(preview)}. This list is recorded with the
-              submission.
+              {viaGateway
+                ? "The figures, signed. This list is recorded with the submission."
+                : `${filingSetCount(preview)}. This list is recorded with the submission.`}
             </p>
           </div>
+
+          {viaGateway && (
+            <p
+              data-testid="transmit-gateway-figures"
+              className="mt-2 text-caption leading-relaxed text-navy/85"
+            >
+              {figures != null
+                ? `${figures.toLocaleString("en-US")} figures from this version`
+                : "The figures of this version"}
+              , signed with {preview.institutionName}&rsquo;s own filing key. The
+              gateway receives the figures, not files; the files below stay with
+              this filing in AequorOS as the record of what was approved.
+            </p>
+          )}
 
           <table className="mt-2.5 w-full text-caption">
             <thead>
@@ -249,12 +274,33 @@ export default function TransmitConfirmDialog({
                 The book is re-checked against this reporting date. A filing is
                 refused if it does not reconcile.
               </li>
-              <li>The files above are delivered to {portal}.</li>
-              <li>
-                {regulatorName} returns a reference and this return becomes{" "}
-                <span className="font-medium text-navy">Submitted</span>.
-              </li>
-              <li>The decision comes later — you check for it.</li>
+              {viaGateway ? (
+                <>
+                  <li>
+                    The figures are signed with your bank&rsquo;s own filing key
+                    and sent to the {portal}.
+                  </li>
+                  <li>
+                    The gateway checks them against the return&rsquo;s published
+                    definition and returns a signed receipt. Once it is verified,
+                    this return becomes{" "}
+                    <span className="font-medium text-navy">Submitted</span>.
+                  </li>
+                  <li>
+                    {regulatorName} supervisors review it there. The decision
+                    comes later — you check for it.
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li>The files above are delivered to {portal}.</li>
+                  <li>
+                    {regulatorName} returns a reference and this return becomes{" "}
+                    <span className="font-medium text-navy">Submitted</span>.
+                  </li>
+                  <li>The decision comes later — you check for it.</li>
+                </>
+              )}
             </ol>
           </section>
         </div>

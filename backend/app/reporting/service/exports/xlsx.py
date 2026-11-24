@@ -16,10 +16,10 @@ from __future__ import annotations
 import io
 import re
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import Any, cast
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -43,6 +43,18 @@ _NUMBER_FORMAT = "#,##0.00;(#,##0.00)"
 _ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
 _MAX_SHEET_TITLE = 31
 _WORKING_COPY_BANNER = "WORKING COPY — FOR INTERNAL REVIEW · not a filing artifact"
+#: The same workbook for a package generated since 2026-11-23, when the formula
+#: workbook began to be filed with every return that has one. Chosen by the
+#: snapshot's ``metadata.formula_workbook`` stamp, so a package generated before
+#: keeps its original wording and re-exports byte for byte (D-021).
+_FILED_WORKBOOK_BANNER = (
+    "FORMULA WORKBOOK — live formulas over the return's sealed figures · "
+    "filed with the return; the signed record holds the fixed values"
+)
+_FILED_WORKBOOK_NOTE = (
+    "Inputs are copied from the sealed report sheets and the formulas recalculate "
+    "from them. Editing a copy changes nothing in the filed return."
+)
 
 
 @dataclass(frozen=True)
@@ -51,6 +63,10 @@ class _SectionLocation:
     first_data_row: int
     row_count: int
     columns: dict[str, int]
+    #: Each data row's line code and the sheet row it sits on, so a formula can
+    #: name a line ("12.3", "USD") instead of guessing its position.
+    rows: dict[str, int] = field(default_factory=lambda: {})
+    total_row: int | None = None
 
 
 def _sheet_title(title: str, used: set[str]) -> str:
@@ -184,6 +200,10 @@ def _section_sheets(
         for rendered_row in section.rows:
             _write_table_row(sheet, row_idx, rendered_row, section.layout.columns)
             row_idx += 1
+        code_index = next(
+            (index for index, column in enumerate(section.layout.columns) if column.key == "code"),
+            None,
+        )
         locations[section.layout.section_code] = _SectionLocation(
             sheet_title=sheet_title,
             first_data_row=header_row + 1,
@@ -192,6 +212,12 @@ def _section_sheets(
                 column.key: column_idx
                 for column_idx, column in enumerate(section.layout.columns, start=1)
             },
+            rows={
+                str(rendered_row.cells[code_index].value): header_row + 1 + offset
+                for offset, rendered_row in enumerate(section.rows)
+                if code_index is not None and rendered_row.cells[code_index].value is not None
+            },
+            total_row=row_idx if section.total_row is not None else None,
         )
         if section.total_row is not None:
             _write_table_row(sheet, row_idx, section.total_row, section.layout.columns, bold=True)
@@ -435,6 +461,473 @@ def _working_irrbb(sheet: Worksheet, locations: dict[str, _SectionLocation]) -> 
     return True
 
 
+# --- Capital Adequacy (CAR-RWA) and Net Open Position (FX-NOP) -------------------
+#
+# Every figure is recomputed by a live formula from the cells of the report sheets
+# in this workbook, and checked against the figure the return reports. The formulas
+# keep to SUM, IF, ABS, MAX and arithmetic (the vocabulary
+# ``bog_forms.formulas.WorkbookEvaluator`` evaluates), so a test can prove that
+# every check reads MATCH.
+
+_MONEY_TOLERANCE = "0.001"  # GHS '000, i.e. one cedi
+_RAW_MONEY_TOLERANCE = "1"  # whole cedis, for figures the return states unscaled
+_RATIO_TOLERANCE = "0.0001"  # percentage points
+
+
+def _ref_at(location: _SectionLocation, key: str, row: int) -> str | None:
+    column = location.columns.get(key)
+    if column is None:
+        return None
+    return f"{_quote_sheet_title(location.sheet_title)}!{get_column_letter(column)}{row}"
+
+
+def _line_ref(location: _SectionLocation | None, code: str, key: str = "value") -> str | None:
+    if location is None:
+        return None
+    row = location.rows.get(code)
+    return None if row is None else _ref_at(location, key, row)
+
+
+def _data_rows(location: _SectionLocation | None) -> list[int]:
+    if location is None:
+        return []
+    return [location.first_data_row + offset for offset in range(location.row_count)]
+
+
+def _sum_of(location: _SectionLocation | None, key: str = "value") -> str:
+    refs = (
+        [ref for row in _data_rows(location) if (ref := _ref_at(location, key, row))]
+        if location
+        else []
+    )
+    return f"SUM({','.join(refs)})" if refs else "0"
+
+
+class _CheckSheet:
+    """Writes ``Line | Calculation | Recalculated | Reported | Check`` rows."""
+
+    def __init__(self, sheet: Worksheet, first_row: int) -> None:
+        self.sheet = sheet
+        self.row = first_row
+
+    def headers(self, labels: tuple[str, ...]) -> None:
+        for column, label in enumerate(labels, start=1):
+            cell = self.sheet.cell(row=self.row, column=column, value=label)
+            cell.font = Font(bold=True)
+            cell.fill = _HEADER_FILL
+        self.row += 1
+
+    def heading(self, text: str) -> None:
+        self.row += 1
+        self.sheet.cell(row=self.row, column=1, value=text).font = Font(bold=True, size=11)
+        self.row += 1
+
+    def line(  # noqa: PLR0913 - one row, every cell of it
+        self,
+        label: str,
+        how: str,
+        recalculated: str | None,
+        reported: str | None,
+        *,
+        number_format: str = _GHS_FORMAT,
+        tolerance: str = _MONEY_TOLERANCE,
+    ) -> int:
+        row = self.row
+        self.sheet.cell(row=row, column=1, value=label)
+        self.sheet.cell(row=row, column=2, value=how).font = Font(italic=True, size=9)
+        if recalculated is not None:
+            self.sheet.cell(
+                row=row, column=3, value=f"={recalculated}"
+            ).number_format = number_format
+        if reported is not None:
+            self.sheet.cell(row=row, column=4, value=f"={reported}").number_format = number_format
+        if recalculated is not None and reported is not None:
+            self.sheet.cell(
+                row=row, column=5, value=f'=IF(ABS(C{row}-D{row})<{tolerance},"MATCH","CHECK")'
+            )
+        self.row += 1
+        return row
+
+    def widths(self, widths: tuple[int, ...]) -> None:
+        for column, width in enumerate(widths, start=1):
+            self.sheet.column_dimensions[get_column_letter(column)].width = width
+
+
+def _working_capital(
+    sheet: Worksheet, locations: dict[str, _SectionLocation], snapshot: dict[str, Any]
+) -> bool:
+    cet1 = locations.get("cet1")
+    credit = locations.get("credit_rwa")
+    ratios = locations.get("capital_ratios")
+    if cet1 is None or credit is None or ratios is None:
+        return False
+    headline = locations.get("headline_comparative")
+    _working_header(sheet, "Capital Adequacy — Working Calculations")
+    out = _CheckSheet(sheet, 5)
+    out.headers(
+        ("Line", "Calculation", "Recalculated", "Reported", "Check", "Minimum (%)", "Meets minimum")
+    )
+
+    def reported_total(code: str) -> str | None:
+        ref = _line_ref(headline, code)
+        if ref is not None:
+            return ref
+        value = _snapshot_total(snapshot, code)
+        return None if value is None else str(value)
+
+    out.heading("Regulatory capital (GHS '000)")
+    cet1_reported = (
+        _ref_at(cet1, "value", cet1.total_row) if cet1.total_row is not None else None
+    ) or reported_total("cet1_total_ghs")
+    r_cet1 = out.line("CET1 capital", "Sum of the CET1 lines", _sum_of(cet1), cet1_reported)
+    r_at1 = out.line(
+        "Additional Tier 1", "Sum of the AT1 lines", _sum_of(locations.get("at1")), None
+    )
+    r_t1 = out.line(
+        "Tier 1 capital", "CET1 + AT1", f"C{r_cet1}+C{r_at1}", reported_total("tier1_total_ghs")
+    )
+    r_t2 = out.line(
+        "Tier 2 capital", "Sum of the Tier 2 lines", _sum_of(locations.get("tier2")), None
+    )
+    r_capital = out.line(
+        "Total regulatory capital",
+        "Tier 1 + Tier 2",
+        f"C{r_t1}+C{r_t2}",
+        reported_total("total_capital_ghs"),
+    )
+
+    out.heading("Credit risk-weighted assets (GHS '000)")
+    credit_rows: list[int] = []
+    for row in _data_rows(credit):
+        exposure = _ref_at(credit, "balance", row)
+        weight = _ref_at(credit, "rate_pct", row)
+        code = _ref_at(credit, "code", row)
+        description = _ref_at(credit, "description", row)
+        if exposure is None or weight is None:
+            continue
+        written = out.line(
+            "", "Exposure × risk weight", f"{exposure}*{weight}/100", _ref_at(credit, "value", row)
+        )
+        if code is not None:
+            sheet.cell(row=written, column=1, value=f"={code}")
+        if description is not None:
+            sheet.cell(row=written, column=2, value=f"={description}")
+        credit_rows.append(written)
+    r_credit = out.line(
+        "Credit RWA",
+        "Sum of the lines above",
+        f"SUM(C{credit_rows[0]}:C{credit_rows[-1]})" if credit_rows else "0",
+        _sum_of(credit),
+    )
+
+    out.heading("Market and operational risk-weighted assets (GHS '000)")
+    r_market = _market_lines(out, locations.get("market_rwa"), r_credit)
+    r_operational = _operational_lines(out, locations.get("operational_rwa"), r_credit)
+    r_rwa = out.line(
+        "Total RWA",
+        "Credit + market + operational",
+        "+".join(f"C{row}" for row in (r_credit, r_market, r_operational)),
+        reported_total("total_rwa_ghs"),
+    )
+
+    _ratio_lines(out, ratios, r_cet1, r_t1, r_capital, r_rwa)
+    out.widths((34, 58, 18, 18, 10, 14, 14))
+    return True
+
+
+def _ratio_lines(  # noqa: PLR0913 - the ratios and the four lines they divide
+    out: _CheckSheet,
+    ratios: _SectionLocation,
+    r_cet1: int,
+    r_t1: int,
+    r_capital: int,
+    r_rwa: int,
+) -> None:
+    sheet = out.sheet
+    out.heading("Capital adequacy ratios (%)")
+    for code, label, numerator in (
+        ("12.1", "CET1 ratio", r_cet1),
+        ("12.2", "Tier 1 ratio", r_t1),
+        ("12.3", "Capital adequacy ratio (CAR)", r_capital),
+    ):
+        reported = _line_ref(ratios, code)
+        if reported is None:
+            continue
+        row = out.line(
+            label,
+            "Capital ÷ total RWA × 100",
+            f"C{numerator}/C{r_rwa}*100",
+            reported,
+            number_format=_PCT_FORMAT,
+            tolerance=_RATIO_TOLERANCE,
+        )
+        minimum = _line_ref(ratios, code, "minimum_pct")
+        if minimum is not None:
+            sheet.cell(row=row, column=6, value=f"={minimum}").number_format = _PCT_FORMAT
+            sheet.cell(row=row, column=7, value=f'=IF(C{row}>=F{row},"Yes","No")')
+    leverage = _line_ref(ratios, "12.4")
+    if leverage is not None:
+        row = out.line(
+            "Leverage ratio",
+            "Tier 1 ÷ leverage exposure measure; the exposure measure is not part of this "
+            "return, so the reported ratio is carried as filed",
+            None,
+            leverage,
+            number_format=_PCT_FORMAT,
+        )
+        minimum = _line_ref(ratios, "12.4", "minimum_pct")
+        if minimum is not None:
+            sheet.cell(row=row, column=6, value=f"={minimum}").number_format = _PCT_FORMAT
+            sheet.cell(row=row, column=7, value=f'=IF(D{row}>=F{row},"Yes","No")')
+
+
+def _market_lines(out: _CheckSheet, market: _SectionLocation | None, r_credit: int) -> int:
+    rows = _data_rows(market)
+    if market is None or len(rows) < 3:
+        return out.line("Market RWA", "No market risk lines in this return", "0", None)
+    rwa = rows[-1]
+    if len(rows) == 3:
+        # Prescribed as a percentage of credit RWA (SDI s.29).
+        return out.line(
+            "Market RWA",
+            "Credit RWA × prescribed percentage",
+            f"C{r_credit}*{_ref_at(market, 'rate_pct', rwa)}/100",
+            _ref_at(market, "value", rwa),
+        )
+    long_, short, charge = rows[0], rows[1], rows[-2]
+    r_open = out.line(
+        "Larger open FX position",
+        "Larger of net long and net short",
+        f"MAX({_ref_at(market, 'balance', long_)},{_ref_at(market, 'balance', short)})",
+        _ref_at(market, "balance", charge),
+    )
+    r_charge = out.line(
+        "FX capital charge",
+        "Larger open position × charge rate",
+        f"C{r_open}*{_ref_at(market, 'rate_pct', charge)}/100",
+        _ref_at(market, "value", charge),
+    )
+    r_multiplier = out.line(
+        "RWA multiplier",
+        "As applied by the return: market RWA ÷ FX charge",
+        f"{_ref_at(market, 'value', rwa)}/{_ref_at(market, 'balance', rwa)}",
+        None,
+        number_format=_NUMBER_FORMAT,
+    )
+    return out.line(
+        "Market RWA",
+        "FX charge × RWA multiplier",
+        f"C{r_charge}*C{r_multiplier}",
+        _ref_at(market, "value", rwa),
+    )
+
+
+def _operational_lines(
+    out: _CheckSheet, operational: _SectionLocation | None, r_credit: int
+) -> int:
+    rows = _data_rows(operational)
+    if operational is None or not rows:
+        return out.line("Operational RWA", "No operational risk lines in this return", "0", None)
+    rwa = rows[-1]
+    if len(rows) == 1:
+        return out.line(
+            "Operational RWA",
+            "Credit RWA × prescribed percentage",
+            f"C{r_credit}*{_ref_at(operational, 'rate_pct', rwa)}/100",
+            _ref_at(operational, "value", rwa),
+        )
+    charge = rows[-2]
+    income = [_ref_at(operational, "value", row) for row in rows[:-2]]
+    counted = [ref for ref in income if ref is not None]
+    r_income = out.line(
+        "Gross income counted",
+        "Positive gross income in the three-year window",
+        f"SUM({','.join(counted)})" if counted else "0",
+        _ref_at(operational, "balance", charge),
+    )
+    r_years = out.line(
+        "Years counted",
+        "Years in the window with positive gross income",
+        "+".join(f"IF({ref}>0,1,0)" for ref in counted) if counted else "0",
+        None,
+        number_format="0",
+    )
+    r_charge = out.line(
+        "BIA capital charge",
+        "Gross income counted × alpha ÷ years counted",
+        f"C{r_income}*{_ref_at(operational, 'rate_pct', charge)}/100/C{r_years}",
+        _ref_at(operational, "value", charge),
+    )
+    r_multiplier = out.line(
+        "RWA multiplier",
+        "As applied by the return: operational RWA ÷ BIA charge",
+        f"{_ref_at(operational, 'value', rwa)}/{_ref_at(operational, 'balance', rwa)}",
+        None,
+        number_format=_NUMBER_FORMAT,
+    )
+    return out.line(
+        "Operational RWA",
+        "BIA charge × RWA multiplier",
+        f"C{r_charge}*C{r_multiplier}",
+        _ref_at(operational, "value", rwa),
+    )
+
+
+def _fx_currency_table(sheet: Worksheet, positions: _SectionLocation) -> tuple[int, int, int]:
+    """One row per currency; returns its first and last rows and the next free row."""
+    headers = (
+        "Currency",
+        "Net position (FCY)",
+        "End-of-day rate",
+        "At end-of-day rate (GHS '000)",
+        "Reported (GHS '000)",
+        "Difference (GHS '000)",
+        "|Net| ÷ Tier 1 (%)",
+        "Reported (%)",
+        "Check",
+        "Within single limit",
+        "Long (GHS)",
+        "Short (GHS)",
+    )
+    for column, header in enumerate(headers, start=1):
+        cell = sheet.cell(row=9, column=column, value=header)
+        cell.font = Font(bold=True)
+        cell.fill = _HEADER_FILL
+    first = 10
+    row = first
+    for report_row in _data_rows(positions):
+        refs = {
+            key: _ref_at(positions, key, report_row)
+            for key in ("code", "net_ccy", "spot_ghs", "value", "abs_pct_tier1")
+        }
+        if refs["value"] is None:
+            continue
+        if refs["code"] is not None:
+            sheet.cell(row=row, column=1, value=f"={refs['code']}")
+        if refs["net_ccy"] is not None and refs["spot_ghs"] is not None:
+            sheet.cell(
+                row=row, column=2, value=f"={refs['net_ccy']}"
+            ).number_format = _NUMBER_FORMAT
+            sheet.cell(row=row, column=3, value=f"={refs['spot_ghs']}").number_format = "0.0000"
+            sheet.cell(
+                row=row, column=4, value=f"=B{row}*C{row}/1000"
+            ).number_format = _NUMBER_FORMAT
+            sheet.cell(row=row, column=6, value=f"=E{row}-D{row}").number_format = _NUMBER_FORMAT
+        sheet.cell(row=row, column=5, value=f"={refs['value']}").number_format = _NUMBER_FORMAT
+        sheet.cell(
+            row=row, column=7, value=f"=ABS(E{row}*1000)/$C$5*100"
+        ).number_format = _PCT_FORMAT
+        if refs["abs_pct_tier1"] is not None:
+            sheet.cell(
+                row=row, column=8, value=f"={refs['abs_pct_tier1']}"
+            ).number_format = _PCT_FORMAT
+            sheet.cell(
+                row=row,
+                column=9,
+                value=f'=IF(ABS(G{row}-H{row})<{_RATIO_TOLERANCE},"MATCH","CHECK")',
+            )
+        sheet.cell(row=row, column=10, value=f'=IF(G{row}<=$C$6,"Yes","No")')
+        sheet.cell(
+            row=row, column=11, value=f"=IF(E{row}>0,E{row}*1000,0)"
+        ).number_format = _GHS_FORMAT
+        sheet.cell(
+            row=row, column=12, value=f"=IF(E{row}<0,-E{row}*1000,0)"
+        ).number_format = _GHS_FORMAT
+        row += 1
+    last = row - 1
+    note = sheet.cell(
+        row=row,
+        column=1,
+        value=(
+            "Difference: the return's GHS position is the booked reporting-currency balance "
+            "plus hedges revalued at the rate; the column beside it converts the whole "
+            "position at the end-of-day rate."
+        ),
+    )
+    note.font = Font(italic=True, size=9)
+
+    return first, last, row
+
+
+def _working_fx_nop(
+    sheet: Worksheet, locations: dict[str, _SectionLocation], snapshot: dict[str, Any]
+) -> bool:
+    positions = locations.get("currency_positions")
+    summary = locations.get("nop_summary")
+    tier1 = _line_ref(summary, "tier1_ghs")
+    if positions is None or summary is None or tier1 is None or not positions.row_count:
+        return False
+    metadata = snapshot.get("metadata")
+    limits = cast(dict[str, object], metadata) if isinstance(metadata, dict) else {}
+    _working_header(sheet, "Net Open Position — Working Calculations")
+
+    sheet.cell(row=5, column=1, value="Tier 1 capital (GHS)").font = Font(bold=True)
+    sheet.cell(row=5, column=3, value=f"={tier1}").number_format = _GHS_FORMAT
+    for row, label, key in (
+        (6, "Single-currency limit (% of Tier 1)", "nop_single_limit_pct"),
+        (7, "Aggregate limit (% of Tier 1)", "nop_aggregate_limit_pct"),
+    ):
+        sheet.cell(row=row, column=1, value=label).font = Font(bold=True)
+        raw = limits.get(key)
+        try:
+            value = Decimal(str(raw)) if raw not in (None, "") else None
+        except InvalidOperation:
+            value = None
+        if value is not None:
+            sheet.cell(row=row, column=3, value=value).number_format = _PCT_FORMAT
+
+    first, last, row = _fx_currency_table(sheet, positions)
+    out = _CheckSheet(sheet, row + 2)
+    out.headers(("Aggregate position", "Calculation", "Recalculated", "Reported", "Check"))
+    r_long = out.line(
+        "Sum of long positions (GHS)",
+        "Sum of the long column",
+        f"SUM(K{first}:K{last})",
+        _line_ref(summary, "sum_long_ghs"),
+        tolerance=_RAW_MONEY_TOLERANCE,
+    )
+    r_short = out.line(
+        "Sum of short positions (GHS)",
+        "Sum of the short column",
+        f"SUM(L{first}:L{last})",
+        _line_ref(summary, "sum_short_ghs"),
+        tolerance=_RAW_MONEY_TOLERANCE,
+    )
+    r_nop = out.line(
+        "Aggregate net open position (GHS)",
+        "Larger of the long and short sums",
+        f"MAX(C{r_long},C{r_short})",
+        _line_ref(summary, "nop_ghs"),
+        tolerance=_RAW_MONEY_TOLERANCE,
+    )
+    r_pct = out.line(
+        "Aggregate NOP as % of Tier 1",
+        "Aggregate NOP ÷ Tier 1 × 100",
+        f"C{r_nop}/$C$5*100",
+        _line_ref(summary, "nop_pct_tier1"),
+        number_format=_PCT_FORMAT,
+        tolerance=_RATIO_TOLERANCE,
+    )
+    sheet.cell(row=r_pct, column=6, value="Within aggregate limit").font = Font(bold=True)
+    sheet.cell(row=r_pct, column=7, value=f'=IF(C{r_pct}<=$C$7,"Yes","No")')
+    out.widths((34, 22, 20, 20, 18, 18, 18, 14, 10, 18, 16, 16))
+    return True
+
+
+def _formula_workbook_filed(snapshot: dict[str, Any]) -> bool:
+    metadata = snapshot.get("metadata")
+    return (
+        isinstance(metadata, dict)
+        and cast(dict[str, object], metadata).get("formula_workbook") == "filed"
+    )
+
+
+def _mark_filed(sheet: Worksheet) -> None:
+    """Restate the header of a workbook that is filed with its return."""
+    sheet.cell(row=1, column=1, value=_FILED_WORKBOOK_BANNER)
+    sheet.cell(row=3, column=1, value=_FILED_WORKBOOK_NOTE)
+
+
 def _working_calculations_sheet(
     workbook: Workbook,
     rendered: RenderedReturn,
@@ -442,7 +935,9 @@ def _working_calculations_sheet(
     snapshot: dict[str, Any],
     used_titles: set[str],
 ) -> None:
-    sheet = workbook.create_sheet(_sheet_title("Working Calculations", used_titles))
+    sheet = cast(
+        Worksheet, workbook.create_sheet(_sheet_title("Working Calculations", used_titles))
+    )
     code = rendered.template.return_code
     written = (
         _working_lmt(sheet, locations)
@@ -453,11 +948,17 @@ def _working_calculations_sheet(
         if code == "SDI-STRESS-ANNUAL"
         else _working_irrbb(sheet, locations)
         if code == "SDI-IRRBB-QUARTERLY"
+        else _working_capital(sheet, locations, snapshot)
+        if code == "CAR-RWA"
+        else _working_fx_nop(sheet, locations, snapshot)
+        if code == "FX-NOP"
         else False
     )
     if not written:
         workbook.remove(sheet)
         return
+    if _formula_workbook_filed(snapshot):
+        _mark_filed(sheet)
     for column in range(1, 7):
         sheet.column_dimensions[get_column_letter(column)].width = 28
 

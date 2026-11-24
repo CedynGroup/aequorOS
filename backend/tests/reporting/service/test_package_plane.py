@@ -50,18 +50,52 @@ def test_a_working_kind_reaches_a_regulator_only_by_opting_in_on_both_axes() -> 
         assert admits(kind, generator="bog_form")
         assert admits(kind, generator="sdi_lmt")
         assert admits(kind, generator=None)
-    # the formula workbook: BoG's own generator only
+    # the formula workbook: every generator that builds one (decision 2026-11-23)
     assert admits("xlsx_working", generator="bog_form")
-    assert not admits("xlsx_working", generator="sdi_lmt")
-    assert not admits("xlsx_working", generator="icaap_report")
+    assert admits("xlsx_working", generator="sdi_lmt")
+    assert admits("xlsx_working", generator="npl_monthly")
+    assert not admits("xlsx_working", generator="icaap_report"), "its working copy is Word"
     assert not admits("xlsx_working", generator=None), "an unregistered return files no copy"
     # the Word draft: no generator can file it, because its KIND never opted in
     for generator in ("bog_form", "icaap_report", None):
         assert not admits("docx_working", generator=generator)
     # a hypothetical future kind: opting in by kind alone is not enough
     generators = reporting_workflow.WORKING_ARTIFACT_FILING_GENERATORS
-    assert generators == {"xlsx_working": frozenset({"bog_form"})}
+    assert generators == {
+        "xlsx_working": frozenset(
+            {
+                "bog_form",
+                "capital",
+                "fx",
+                "npl_monthly",
+                "sdi_irrbb",
+                "sdi_large_exposures",
+                "sdi_lmt",
+                "sdi_stress_annual",
+            }
+        )
+    }
     assert set(generators) <= filable, "only an opted-in kind may name generators"
+
+
+def test_every_return_with_a_formula_workbook_files_it() -> None:
+    """The regulator receives the Excel with formulas wherever one exists.
+
+    A new generator that builds a formula workbook but is not named in
+    ``WORKING_ARTIFACT_FILING_GENERATORS`` would silently file values only; this
+    pins the list to what the registry actually builds. ICAAP's working copy is
+    the Word draft, a kind that never files.
+    """
+    from app.reporting.service.registry import REGISTRY  # noqa: PLC0415
+
+    builds = {
+        definition.generator
+        for definition in REGISTRY.values()
+        if reporting_workflow._produces_working_copy(definition)  # pyright: ignore[reportPrivateUsage]
+        and not definition.generator.startswith("icaap")
+    }
+    admitted = reporting_workflow.WORKING_ARTIFACT_FILING_GENERATORS["xlsx_working"]
+    assert builds == admitted
 
 
 def test_every_icaap_entry_pairs_with_its_own_template() -> None:

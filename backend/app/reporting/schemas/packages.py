@@ -44,7 +44,7 @@ type PackageStatus = Literal[
     "superseded",
 ]
 type ArtifactKind = Literal["xlsx", "csv", "pdf", "xlsx_working", "docx_working"]
-type ChannelCode = Literal["orass_api", "orass_sandbox", "email", "manual"]
+type ChannelCode = Literal["orass_api", "orass_sandbox", "reporting_gateway", "email", "manual"]
 type SubmissionEventType = Literal[
     "submitted", "status_poll", "acknowledged", "rejected", "declined"
 ]
@@ -488,6 +488,46 @@ class ReportingSettingsWriteAcknowledgement(ClosedModel):
     created: bool
 
 
+type DefaultChannelCode = Literal["reporting_gateway", "orass_api", "manual"]
+type ReportingBasis = Literal["solo", "consolidated"]
+
+
+class FilingProfilePut(ClosedModel):
+    """What every channel shares, set once, and where approved returns go.
+
+    ``default_channel`` unset means each return follows its registry default.
+    The institution code is not here: it lives on the institution profile.
+    """
+
+    reporting_basis: ReportingBasis = "solo"
+    contact_name: str | None = Field(default=None, max_length=200)
+    contact_email: str | None = Field(default=None, max_length=200, pattern=r"^[^@\s]+@[^@\s]+$")
+    default_channel: DefaultChannelCode | None = None
+
+
+class FilingProfileRead(ClosedModel):
+    bank_id: str
+    institution_code: str | None
+    reporting_basis: ReportingBasis
+    contact_name: str | None
+    contact_email: str | None
+    default_channel: DefaultChannelCode | None
+    updated_at: datetime | None
+    #: Whether the bank can file through ORASS's API (its API access is configured).
+    orass_ready: bool = False
+
+
+class FilingProfileWriteAcknowledgement(ClosedModel):
+    """Write-only evidence of a filing-profile write: the submitted values."""
+
+    bank_id: str
+    reporting_basis: ReportingBasis
+    contact_name: str | None
+    contact_email: str | None
+    default_channel: DefaultChannelCode | None
+    created: bool
+
+
 class PackageSubmitCreate(ClosedModel):
     """Channel selection for submitRegulatoryPackage; omitted -> registry default."""
 
@@ -606,6 +646,12 @@ class FilingSetPreviewRead(ClosedModel):
     #: not yet done. A one-file filing can be entirely correct; an officer
     #: cannot tell that by counting files.
     omissions: list[str]
+    #: The channel this submission WOULD use (the bank's default where the return
+    #: allows it, else the return's own), resolved as the submission resolves it.
+    channel: ChannelCode
+    #: For the AequorOS Reporting Gateway: how many figures the signed filing
+    #: carries. ``None`` for other channels, which deliver the files above.
+    gateway_figure_count: int | None = None
 
 
 class SubmissionPollRead(ClosedModel):

@@ -99,6 +99,7 @@ from app.market_data.api.manage_market_data_uploads import router as market_data
 from app.market_data.api.market_data_sources import router as market_data_sources_router
 from app.market_data.api.read_market_data_views import router as market_data_views_router
 from app.notifications.api.manage_notifications import router as notifications_router
+from app.notifications.api.manage_preferences import router as notification_preferences_router
 from app.rating.api.run_implied_rating import router as implied_rating_router
 from app.reporting.api.examiner_surfaces import router as examiner_router
 from app.reporting.api.manage_filing_workflow import router as filing_workflow_router
@@ -198,6 +199,7 @@ v1_router.include_router(audit_log_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(organization_users_router)
 v1_router.include_router(institution_profile_router, dependencies=BANK_ROUTE_DEPENDENCIES)
 v1_router.include_router(integration_keys_router)
+v1_router.include_router(notification_preferences_router)
 v1_router.include_router(notifications_router)
 v1_router.include_router(
     forecasting_router,

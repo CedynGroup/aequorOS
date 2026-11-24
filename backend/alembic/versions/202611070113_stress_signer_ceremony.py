@@ -10,6 +10,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from alembic import op
+from app.db.session import force_rls_suspended
 
 revision = "202611070113"
 down_revision = "202611070112"
@@ -27,13 +28,16 @@ def upgrade() -> None:
     op.add_column(_TABLE, sa.Column(_RECIPIENT, sa.Uuid(), nullable=True))
     op.add_column(_TABLE, sa.Column(_DIGEST, sa.String(length=64), nullable=True))
     op.add_column(_TABLE, sa.Column(_AUTHORIZATION, sa.Uuid(), nullable=True))
-    op.create_foreign_key(
-        _FK,
-        _TABLE,
-        "signing_authorizations",
-        [_AUTHORIZATION],
-        ["id"],
-    )
+    # Adding a foreign key validates existing rows with a query that forced RLS
+    # would filter (or refuse under row_security=off), so validate as the owner.
+    with force_rls_suspended(op.get_bind(), _TABLE, "signing_authorizations"):
+        op.create_foreign_key(
+            _FK,
+            _TABLE,
+            "signing_authorizations",
+            [_AUTHORIZATION],
+            ["id"],
+        )
 
 
 def downgrade() -> None:

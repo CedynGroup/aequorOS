@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Institution profile</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#F4F6F8}
+a{color:#1F4FD1}a:hover{color:#163A9C}
+</style>
+</helmet>
+<div style="box-sizing: border-box; min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6F8; color: #0E1726; font-family: Inter, system-ui, sans-serif">
+<div style="flex: 1 1 248px; max-width: 100%; background: #0F1E36; display: flex">
+<dc-import name="Sidebar" active="institutions" hint-size="100%,1000px"></dc-import>
+</div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; padding: 28px 32px 48px">
+<header style="display: flex; flex-direction: column; gap: 12px">
+<span style="font-size: 13px; color: #4B5565"><a href="Institution.dc.html" style="color: #4B5565">Institutions</a> / Northgate Savings &amp; Loans</span>
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.01em">Northgate Savings &amp; Loans</h1>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<span style="font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; background: #EEF0F3; color: #344054">Savings and loans company</span>
+<span style="font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; background: #EEF0F3; color: #344054">Institution code 0231</span>
+<span style="font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; background: #EEF0F3; color: #344054">Files by portal upload</span>
+<span style="font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; background: #FBE7E7; color: #A12A2A">Heightened monitoring</span>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<button type="button" style="height: 44px; padding: 0 16px; border: 1px solid #C9D1DB; border-radius: 8px; background: #FFFFFF; color: #0E1726; font: inherit; font-size: 14px; font-weight: 500">Export filing record</button>
+<a href="Queries.dc.html" style="display: inline-flex; align-items: center; height: 44px; padding: 0 18px; border-radius: 8px; background: #1F4FD1; color: #FFFFFF; font-size: 14px; font-weight: 600; text-decoration: none">Raise query</a>
+</div>
+</div>
+</header>
+
+<section aria-label="Filing summary" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px">
+<sc-for list="{{stats}}" as="stat" hint-placeholder-count="5">
+<div style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #4B5565; font-weight: 500">{{stat.label}}</span>
+<span style="{{stat.valueStyle}}">{{stat.value}}</span>
+<span style="font-size: 12px; color: #4B5565">{{stat.note}}</span>
+</div>
+</sc-for>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<section aria-labelledby="history-title" style="flex: 2 1 620px; min-width: 0; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: flex-start">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 id="history-title" style="margin: 0; font-size: 17px; font-weight: 600">Filing record, last 11 months</h2>
+<span style="font-size: 13px; color: #4B5565">Monthly returns by reporting date · select a cell to open the filing</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: #344054">
+<sc-for list="{{legend}}" as="key" hint-placeholder-count="3">
+<span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="{{key.swatch}}">{{key.glyph}}</span>{{key.label}}</span>
+</sc-for>
+</div>
+</div>
+<div style="overflow-x: auto">
+<table style="border-collapse: separate; border-spacing: 4px; font-size: 13px; min-width: 640px; width: 100%">
+<thead>
+<tr>
+<th scope="col" style="text-align: left; font-weight: 600; color: #4B5565; font-size: 12px; padding: 0 8px 6px 0">Return</th>
+<sc-for list="{{months}}" as="month" hint-placeholder-count="11">
+<th scope="col" style="font-weight: 500; color: #4B5565; font-size: 11px; padding-bottom: 6px; white-space: nowrap">{{month}}</th>
+</sc-for>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{history}}" as="row" hint-placeholder-count="8">
+<tr>
+<th scope="row" style="text-align: left; font-family: 'IBM Plex Mono', monospace; font-weight: 500; font-size: 12px; padding-right: 8px; white-space: nowrap">{{row.code}}</th>
+<sc-for list="{{row.cells}}" as="cell" hint-placeholder-count="11">
+<td style="padding: 0"><a href="Submission.dc.html" aria-label="{{cell.aria}}" style="{{cell.style}}">{{cell.glyph}}</a></td>
+</sc-for>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</section>
+
+<div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<section aria-labelledby="due-title" style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px">
+<h2 id="due-title" style="margin: 0; font-size: 17px; font-weight: 600">Obligations, next 30 days</h2>
+<ul style="list-style: none; margin: 0; padding: 0">
+<sc-for list="{{obligations}}" as="ob" hint-placeholder-count="5">
+<li style="display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid #EEF0F3">
+<span style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500">{{ob.code}}</span>
+<span style="font-size: 12px; color: #4B5565">{{ob.detail}}</span>
+</span>
+<span style="{{ob.chip}}">{{ob.status}}</span>
+</li>
+</sc-for>
+</ul>
+</section>
+
+<section aria-labelledby="contacts-title" style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px">
+<h2 id="contacts-title" style="margin: 0; font-size: 17px; font-weight: 600">Contacts and credentials</h2>
+<dl style="margin: 0; display: flex; flex-direction: column; gap: 10px; font-size: 14px">
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">Compliance officer</dt><dd style="margin: 0; font-weight: 500; text-align: right">Abena Darko</dd></div>
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">Technical contact</dt><dd style="margin: 0; font-weight: 500; text-align: right">Yaw Mensah</dd></div>
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">Portal users</dt><dd style="margin: 0; font-weight: 500; text-align: right">3 active · MFA on</dd></div>
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">API client</dt><dd style="margin: 0; font-weight: 500; text-align: right">Not yet issued</dd></div>
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">Relationship supervisor</dt><dd style="margin: 0; font-weight: 500; text-align: right">A. Boateng</dd></div>
+</dl>
+<a href="Onboarding.dc.html" style="font-size: 13px; font-weight: 500">Manage credentials</a>
+</section>
+
+<section aria-labelledby="notes-title" style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px">
+<h2 id="notes-title" style="margin: 0; font-size: 17px; font-weight: 600">Supervisory notes</h2>
+<span style="font-size: 12px; color: #4B5565">Internal · never shown to the institution</span>
+</div>
+<p style="margin: 0; font-size: 14px; line-height: 1.55; color: #344054">Four returns outstanding for October. Institution reports a core banking migration; requested a remediation plan by 28 Nov. — A. Boateng, 19 Nov</p>
+</section>
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1340}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const valueBase = 'font-size: 28px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; ';
+    const stats = [
+      { label: 'On time, 12 months', value: '71%', note: 'peer median 96%', tone: '#8A4B00' },
+      { label: 'Outstanding now', value: '4', note: 'October cycle', tone: '#A12A2A' },
+      { label: 'Filed late this year', value: '19', note: 'of 88 filings', tone: '#8A4B00' },
+      { label: 'Open queries', value: '1', note: 'awaiting supervisor', tone: '#5B35C2' },
+      { label: 'Last filing', value: '20 Nov', note: 'BSD2 v1 · portal upload', tone: '#0E1726' }
+    ].map((s) => ({ ...s, valueStyle: valueBase + 'color: ' + s.tone }));
+    const cellBase = 'display: flex; align-items: center; justify-content: center; width: 100%; min-width: 36px; height: 30px; border-radius: 5px; text-decoration: none; font-size: 13px; font-weight: 700; color: #FFFFFF; ';
+    const states = {
+      O: { label: 'On time', css: 'background: #2457C5', glyph: '' },
+      L: { label: 'Late', css: 'background: #E8913A', glyph: '' },
+      X: { label: 'Outstanding or rejected', css: 'background: #9B1C1C', glyph: '!' }
+    };
+    const months = ['Dec 25', 'Jan 26', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'];
+    const rows = [
+      ['BSD2', 'OOOLOOLOOLO'],
+      ['BSD3A', 'OOOOLOOLOOX'],
+      ['BSD5A', 'OOLOOOLOLOX'],
+      ['BSD6', 'OOOOOLOOOLL'],
+      ['BSD7A', 'OLOOOOOLOOO'],
+      ['BSD8', 'OOOOLOOOOLX'],
+      ['BSD13', 'OOOOOOOLOOO'],
+      ['NPL-MONTHLY', 'OOLOOOOOLOX']
+    ];
+    const history = rows.map(([code, pattern]) => ({
+      code,
+      cells: pattern.split('').map((m, i) => ({
+        style: cellBase + states[m].css,
+        glyph: states[m].glyph,
+        aria: code + ', ' + months[i] + ': ' + states[m].label
+      }))
+    }));
+    const swatch = 'display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #FFFFFF; ';
+    const legend = ['O', 'L', 'X'].map((k) => ({ label: states[k].label, glyph: states[k].glyph, swatch: swatch + states[k].css }));
+    const chipBase = 'display: inline-flex; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; white-space: nowrap; ';
+    const chips = {
+      Overdue: 'background: #FBE7E7; color: #A12A2A',
+      'Due soon': 'background: #FDEFD9; color: #8A4B00',
+      Upcoming: 'background: #EEF0F3; color: #344054'
+    };
+    const obligations = [
+      ['BSD5A', '31 Oct 2026 · was due 13 Nov', 'Overdue'],
+      ['BSD3A', '31 Oct 2026 · was due 13 Nov', 'Overdue'],
+      ['BSD8', '31 Oct 2026 · was due 13 Nov', 'Overdue'],
+      ['NPL-MONTHLY', '31 Oct 2026 · was due 16 Nov', 'Overdue'],
+      ['BSD1', 'Weekly · due 23 Nov', 'Due soon'],
+      ['BSD2', '30 Nov 2026 · due 14 Dec', 'Upcoming']
+    ].map(([code, detail, status]) => ({ code, detail, status, chip: chipBase + chips[status] }));
+    return { stats, months, history, legend, obligations };
+  }
+}
+</script>
+</body>
+</html>

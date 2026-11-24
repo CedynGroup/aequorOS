@@ -1,0 +1,1406 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD1A",
+ "name": "Twenty Largest Withdrawals Over the Counter",
+ "cadence": "weekly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd1a-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD1A.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_20_largest_withdrawals",
+   "title": "20 LARGEST WITHDRAWALS",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD1A.serial.R11.serial",
+     "label": "Serial #1",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R11.customer",
+     "label": "Withdrawal #1 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R11.branch",
+     "label": "Withdrawal #1 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R11.account_type",
+     "label": "Withdrawal #1 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R11.thu",
+     "label": "Withdrawal #1 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R11.fri",
+     "label": "Withdrawal #1 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R11.mon",
+     "label": "Withdrawal #1 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R11.tue",
+     "label": "Withdrawal #1 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R11.wed",
+     "label": "Withdrawal #1 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J11",
+     "label": "Cell J11",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R12.serial",
+     "label": "Serial #2",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R12.customer",
+     "label": "Withdrawal #2 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R12.branch",
+     "label": "Withdrawal #2 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R12.account_type",
+     "label": "Withdrawal #2 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R12.thu",
+     "label": "Withdrawal #2 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R12.fri",
+     "label": "Withdrawal #2 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R12.mon",
+     "label": "Withdrawal #2 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R12.tue",
+     "label": "Withdrawal #2 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R12.wed",
+     "label": "Withdrawal #2 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J12",
+     "label": "Cell J12",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R13.serial",
+     "label": "Serial #3",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R13.customer",
+     "label": "Withdrawal #3 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R13.branch",
+     "label": "Withdrawal #3 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R13.account_type",
+     "label": "Withdrawal #3 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R13.thu",
+     "label": "Withdrawal #3 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R13.fri",
+     "label": "Withdrawal #3 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R13.mon",
+     "label": "Withdrawal #3 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R13.tue",
+     "label": "Withdrawal #3 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R13.wed",
+     "label": "Withdrawal #3 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J13",
+     "label": "Cell J13",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R14.serial",
+     "label": "Serial #4",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R14.customer",
+     "label": "Withdrawal #4 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R14.branch",
+     "label": "Withdrawal #4 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R14.account_type",
+     "label": "Withdrawal #4 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R14.thu",
+     "label": "Withdrawal #4 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R14.fri",
+     "label": "Withdrawal #4 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R14.mon",
+     "label": "Withdrawal #4 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R14.tue",
+     "label": "Withdrawal #4 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R14.wed",
+     "label": "Withdrawal #4 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J14",
+     "label": "Cell J14",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R15.serial",
+     "label": "Serial #5",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R15.customer",
+     "label": "Withdrawal #5 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R15.branch",
+     "label": "Withdrawal #5 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R15.account_type",
+     "label": "Withdrawal #5 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R15.thu",
+     "label": "Withdrawal #5 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R15.fri",
+     "label": "Withdrawal #5 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R15.mon",
+     "label": "Withdrawal #5 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R15.tue",
+     "label": "Withdrawal #5 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R15.wed",
+     "label": "Withdrawal #5 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J15",
+     "label": "Cell J15",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R16.serial",
+     "label": "Serial #6",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R16.customer",
+     "label": "Withdrawal #6 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R16.branch",
+     "label": "Withdrawal #6 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R16.account_type",
+     "label": "Withdrawal #6 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R16.thu",
+     "label": "Withdrawal #6 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R16.fri",
+     "label": "Withdrawal #6 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R16.mon",
+     "label": "Withdrawal #6 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R16.tue",
+     "label": "Withdrawal #6 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R16.wed",
+     "label": "Withdrawal #6 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J16",
+     "label": "Cell J16",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R17.serial",
+     "label": "Serial #7",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R17.customer",
+     "label": "Withdrawal #7 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R17.branch",
+     "label": "Withdrawal #7 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R17.account_type",
+     "label": "Withdrawal #7 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R17.thu",
+     "label": "Withdrawal #7 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R17.fri",
+     "label": "Withdrawal #7 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R17.mon",
+     "label": "Withdrawal #7 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R17.tue",
+     "label": "Withdrawal #7 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R17.wed",
+     "label": "Withdrawal #7 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J17",
+     "label": "Cell J17",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R18.serial",
+     "label": "Serial #8",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R18.customer",
+     "label": "Withdrawal #8 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R18.branch",
+     "label": "Withdrawal #8 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R18.account_type",
+     "label": "Withdrawal #8 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R18.thu",
+     "label": "Withdrawal #8 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R18.fri",
+     "label": "Withdrawal #8 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R18.mon",
+     "label": "Withdrawal #8 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R18.tue",
+     "label": "Withdrawal #8 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R18.wed",
+     "label": "Withdrawal #8 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J18",
+     "label": "Cell J18",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R19.serial",
+     "label": "Serial #9",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R19.customer",
+     "label": "Withdrawal #9 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R19.branch",
+     "label": "Withdrawal #9 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R19.account_type",
+     "label": "Withdrawal #9 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R19.thu",
+     "label": "Withdrawal #9 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R19.fri",
+     "label": "Withdrawal #9 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R19.mon",
+     "label": "Withdrawal #9 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R19.tue",
+     "label": "Withdrawal #9 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R19.wed",
+     "label": "Withdrawal #9 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J19",
+     "label": "Cell J19",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R20.serial",
+     "label": "Serial #10",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R20.customer",
+     "label": "Withdrawal #10 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R20.branch",
+     "label": "Withdrawal #10 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R20.account_type",
+     "label": "Withdrawal #10 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R20.thu",
+     "label": "Withdrawal #10 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R20.fri",
+     "label": "Withdrawal #10 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R20.mon",
+     "label": "Withdrawal #10 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R20.tue",
+     "label": "Withdrawal #10 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R20.wed",
+     "label": "Withdrawal #10 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J20",
+     "label": "Cell J20",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R21.serial",
+     "label": "Serial #11",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R21.customer",
+     "label": "Withdrawal #11 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R21.branch",
+     "label": "Withdrawal #11 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R21.account_type",
+     "label": "Withdrawal #11 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R21.thu",
+     "label": "Withdrawal #11 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R21.fri",
+     "label": "Withdrawal #11 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R21.mon",
+     "label": "Withdrawal #11 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R21.tue",
+     "label": "Withdrawal #11 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R21.wed",
+     "label": "Withdrawal #11 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J21",
+     "label": "Cell J21",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R22.serial",
+     "label": "Serial #12",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R22.customer",
+     "label": "Withdrawal #12 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R22.branch",
+     "label": "Withdrawal #12 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R22.account_type",
+     "label": "Withdrawal #12 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R22.thu",
+     "label": "Withdrawal #12 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R22.fri",
+     "label": "Withdrawal #12 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R22.mon",
+     "label": "Withdrawal #12 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R22.tue",
+     "label": "Withdrawal #12 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R22.wed",
+     "label": "Withdrawal #12 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J22",
+     "label": "Cell J22",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R23.serial",
+     "label": "Serial #13",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R23.customer",
+     "label": "Withdrawal #13 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R23.branch",
+     "label": "Withdrawal #13 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R23.account_type",
+     "label": "Withdrawal #13 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R23.thu",
+     "label": "Withdrawal #13 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R23.fri",
+     "label": "Withdrawal #13 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R23.mon",
+     "label": "Withdrawal #13 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R23.tue",
+     "label": "Withdrawal #13 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R23.wed",
+     "label": "Withdrawal #13 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J23",
+     "label": "Cell J23",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R24.serial",
+     "label": "Serial #14",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R24.customer",
+     "label": "Withdrawal #14 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R24.branch",
+     "label": "Withdrawal #14 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R24.account_type",
+     "label": "Withdrawal #14 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R24.thu",
+     "label": "Withdrawal #14 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R24.fri",
+     "label": "Withdrawal #14 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R24.mon",
+     "label": "Withdrawal #14 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R24.tue",
+     "label": "Withdrawal #14 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R24.wed",
+     "label": "Withdrawal #14 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J24",
+     "label": "Cell J24",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R25.serial",
+     "label": "Serial #15",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R25.customer",
+     "label": "Withdrawal #15 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R25.branch",
+     "label": "Withdrawal #15 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R25.account_type",
+     "label": "Withdrawal #15 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R25.thu",
+     "label": "Withdrawal #15 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R25.fri",
+     "label": "Withdrawal #15 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R25.mon",
+     "label": "Withdrawal #15 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R25.tue",
+     "label": "Withdrawal #15 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R25.wed",
+     "label": "Withdrawal #15 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J25",
+     "label": "Cell J25",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R26.serial",
+     "label": "Serial #16",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R26.customer",
+     "label": "Withdrawal #16 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R26.branch",
+     "label": "Withdrawal #16 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R26.account_type",
+     "label": "Withdrawal #16 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R26.thu",
+     "label": "Withdrawal #16 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R26.fri",
+     "label": "Withdrawal #16 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R26.mon",
+     "label": "Withdrawal #16 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R26.tue",
+     "label": "Withdrawal #16 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R26.wed",
+     "label": "Withdrawal #16 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J26",
+     "label": "Cell J26",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R27.serial",
+     "label": "Serial #17",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R27.customer",
+     "label": "Withdrawal #17 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R27.branch",
+     "label": "Withdrawal #17 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R27.account_type",
+     "label": "Withdrawal #17 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R27.thu",
+     "label": "Withdrawal #17 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R27.fri",
+     "label": "Withdrawal #17 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R27.mon",
+     "label": "Withdrawal #17 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R27.tue",
+     "label": "Withdrawal #17 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R27.wed",
+     "label": "Withdrawal #17 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J27",
+     "label": "Cell J27",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R28.serial",
+     "label": "Serial #18",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R28.customer",
+     "label": "Withdrawal #18 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R28.branch",
+     "label": "Withdrawal #18 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R28.account_type",
+     "label": "Withdrawal #18 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R28.thu",
+     "label": "Withdrawal #18 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R28.fri",
+     "label": "Withdrawal #18 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R28.mon",
+     "label": "Withdrawal #18 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R28.tue",
+     "label": "Withdrawal #18 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R28.wed",
+     "label": "Withdrawal #18 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J28",
+     "label": "Cell J28",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R29.serial",
+     "label": "Serial #19",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R29.customer",
+     "label": "Withdrawal #19 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R29.branch",
+     "label": "Withdrawal #19 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R29.account_type",
+     "label": "Withdrawal #19 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R29.thu",
+     "label": "Withdrawal #19 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R29.fri",
+     "label": "Withdrawal #19 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R29.mon",
+     "label": "Withdrawal #19 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R29.tue",
+     "label": "Withdrawal #19 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R29.wed",
+     "label": "Withdrawal #19 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J29",
+     "label": "Cell J29",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1A.serial.R30.serial",
+     "label": "Serial #20",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1A.R30.customer",
+     "label": "Withdrawal #20 — customer",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R30.branch",
+     "label": "Withdrawal #20 — branch",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R30.account_type",
+     "label": "Withdrawal #20 — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1A.R30.thu",
+     "label": "Withdrawal #20 — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R30.fri",
+     "label": "Withdrawal #20 — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R30.mon",
+     "label": "Withdrawal #20 — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R30.tue",
+     "label": "Withdrawal #20 — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1A.R30.wed",
+     "label": "Withdrawal #20 — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J30",
+     "label": "Cell J30",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "20 LARGEST WITHDRAWALS!J31",
+     "label": "Cell J31",
+     "kind": "number",
+     "total": true
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "BSD1A-ARI-0001",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J11",
+   "terms": [
+    "BSD1A.R11.thu",
+    "BSD1A.R11.fri",
+    "BSD1A.R11.mon",
+    "BSD1A.R11.tue",
+    "BSD1A.R11.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J11 follows the template formula =SUM(E11:I11)"
+  },
+  {
+   "id": "BSD1A-ARI-0002",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J12",
+   "terms": [
+    "BSD1A.R12.thu",
+    "BSD1A.R12.fri",
+    "BSD1A.R12.mon",
+    "BSD1A.R12.tue",
+    "BSD1A.R12.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J12 follows the template formula =SUM(E12:I12)"
+  },
+  {
+   "id": "BSD1A-ARI-0003",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J13",
+   "terms": [
+    "BSD1A.R13.thu",
+    "BSD1A.R13.fri",
+    "BSD1A.R13.mon",
+    "BSD1A.R13.tue",
+    "BSD1A.R13.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J13 follows the template formula =SUM(E13:I13)"
+  },
+  {
+   "id": "BSD1A-ARI-0004",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J14",
+   "terms": [
+    "BSD1A.R14.thu",
+    "BSD1A.R14.fri",
+    "BSD1A.R14.mon",
+    "BSD1A.R14.tue",
+    "BSD1A.R14.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J14 follows the template formula =SUM(E14:I14)"
+  },
+  {
+   "id": "BSD1A-ARI-0005",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J15",
+   "terms": [
+    "BSD1A.R15.thu",
+    "BSD1A.R15.fri",
+    "BSD1A.R15.mon",
+    "BSD1A.R15.tue",
+    "BSD1A.R15.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J15 follows the template formula =SUM(E15:I15)"
+  },
+  {
+   "id": "BSD1A-ARI-0006",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J16",
+   "terms": [
+    "BSD1A.R16.thu",
+    "BSD1A.R16.fri",
+    "BSD1A.R16.mon",
+    "BSD1A.R16.tue",
+    "BSD1A.R16.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J16 follows the template formula =SUM(E16:I16)"
+  },
+  {
+   "id": "BSD1A-ARI-0007",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J17",
+   "terms": [
+    "BSD1A.R17.thu",
+    "BSD1A.R17.fri",
+    "BSD1A.R17.mon",
+    "BSD1A.R17.tue",
+    "BSD1A.R17.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J17 follows the template formula =SUM(E17:I17)"
+  },
+  {
+   "id": "BSD1A-ARI-0008",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J18",
+   "terms": [
+    "BSD1A.R18.thu",
+    "BSD1A.R18.fri",
+    "BSD1A.R18.mon",
+    "BSD1A.R18.tue",
+    "BSD1A.R18.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J18 follows the template formula =SUM(E18:I18)"
+  },
+  {
+   "id": "BSD1A-ARI-0009",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J19",
+   "terms": [
+    "BSD1A.R19.thu",
+    "BSD1A.R19.fri",
+    "BSD1A.R19.mon",
+    "BSD1A.R19.tue",
+    "BSD1A.R19.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J19 follows the template formula =SUM(E19:I19)"
+  },
+  {
+   "id": "BSD1A-ARI-0010",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J20",
+   "terms": [
+    "BSD1A.R20.thu",
+    "BSD1A.R20.fri",
+    "BSD1A.R20.mon",
+    "BSD1A.R20.tue",
+    "BSD1A.R20.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J20 follows the template formula =SUM(E20:I20)"
+  },
+  {
+   "id": "BSD1A-ARI-0011",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J21",
+   "terms": [
+    "BSD1A.R21.thu",
+    "BSD1A.R21.fri",
+    "BSD1A.R21.mon",
+    "BSD1A.R21.tue",
+    "BSD1A.R21.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J21 follows the template formula =SUM(E21:I21)"
+  },
+  {
+   "id": "BSD1A-ARI-0012",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J22",
+   "terms": [
+    "BSD1A.R22.thu",
+    "BSD1A.R22.fri",
+    "BSD1A.R22.mon",
+    "BSD1A.R22.tue",
+    "BSD1A.R22.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J22 follows the template formula =SUM(E22:I22)"
+  },
+  {
+   "id": "BSD1A-ARI-0013",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J23",
+   "terms": [
+    "BSD1A.R23.thu",
+    "BSD1A.R23.fri",
+    "BSD1A.R23.mon",
+    "BSD1A.R23.tue",
+    "BSD1A.R23.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J23 follows the template formula =SUM(E23:I23)"
+  },
+  {
+   "id": "BSD1A-ARI-0014",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J24",
+   "terms": [
+    "BSD1A.R24.thu",
+    "BSD1A.R24.fri",
+    "BSD1A.R24.mon",
+    "BSD1A.R24.tue",
+    "BSD1A.R24.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J24 follows the template formula =SUM(E24:I24)"
+  },
+  {
+   "id": "BSD1A-ARI-0015",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J25",
+   "terms": [
+    "BSD1A.R25.thu",
+    "BSD1A.R25.fri",
+    "BSD1A.R25.mon",
+    "BSD1A.R25.tue",
+    "BSD1A.R25.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J25 follows the template formula =SUM(E25:I25)"
+  },
+  {
+   "id": "BSD1A-ARI-0016",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J26",
+   "terms": [
+    "BSD1A.R26.thu",
+    "BSD1A.R26.fri",
+    "BSD1A.R26.mon",
+    "BSD1A.R26.tue",
+    "BSD1A.R26.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J26 follows the template formula =SUM(E26:I26)"
+  },
+  {
+   "id": "BSD1A-ARI-0017",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J27",
+   "terms": [
+    "BSD1A.R27.thu",
+    "BSD1A.R27.fri",
+    "BSD1A.R27.mon",
+    "BSD1A.R27.tue",
+    "BSD1A.R27.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J27 follows the template formula =SUM(E27:I27)"
+  },
+  {
+   "id": "BSD1A-ARI-0018",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J28",
+   "terms": [
+    "BSD1A.R28.thu",
+    "BSD1A.R28.fri",
+    "BSD1A.R28.mon",
+    "BSD1A.R28.tue",
+    "BSD1A.R28.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J28 follows the template formula =SUM(E28:I28)"
+  },
+  {
+   "id": "BSD1A-ARI-0019",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J29",
+   "terms": [
+    "BSD1A.R29.thu",
+    "BSD1A.R29.fri",
+    "BSD1A.R29.mon",
+    "BSD1A.R29.tue",
+    "BSD1A.R29.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J29 follows the template formula =SUM(E29:I29)"
+  },
+  {
+   "id": "BSD1A-ARI-0020",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J30",
+   "terms": [
+    "BSD1A.R30.thu",
+    "BSD1A.R30.fri",
+    "BSD1A.R30.mon",
+    "BSD1A.R30.tue",
+    "BSD1A.R30.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "20 LARGEST WITHDRAWALS!J30 follows the template formula =SUM(E30:I30)"
+  },
+  {
+   "id": "BSD1A-ARI-0021",
+   "severity": "error",
+   "kind": "sum",
+   "target": "20 LARGEST WITHDRAWALS!J31",
+   "terms": [
+    "20 LARGEST WITHDRAWALS!J11",
+    "20 LARGEST WITHDRAWALS!J12",
+    "20 LARGEST WITHDRAWALS!J13",
+    "20 LARGEST WITHDRAWALS!J14",
+    "20 LARGEST WITHDRAWALS!J15",
+    "20 LARGEST WITHDRAWALS!J16",
+    "20 LARGEST WITHDRAWALS!J17",
+    "20 LARGEST WITHDRAWALS!J18",
+    "20 LARGEST WITHDRAWALS!J19",
+    "20 LARGEST WITHDRAWALS!J20",
+    "20 LARGEST WITHDRAWALS!J21",
+    "20 LARGEST WITHDRAWALS!J22",
+    "20 LARGEST WITHDRAWALS!J23",
+    "20 LARGEST WITHDRAWALS!J24",
+    "20 LARGEST WITHDRAWALS!J25",
+    "20 LARGEST WITHDRAWALS!J26",
+    "20 LARGEST WITHDRAWALS!J27",
+    "20 LARGEST WITHDRAWALS!J28",
+    "20 LARGEST WITHDRAWALS!J29",
+    "20 LARGEST WITHDRAWALS!J30"
+   ],
+   "tolerance": "0.105",
+   "description": "20 LARGEST WITHDRAWALS!J31 follows the template formula =SUM(J11:J30)"
+  }
+ ]
+}

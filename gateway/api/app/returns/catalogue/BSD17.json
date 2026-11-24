@@ -1,0 +1,142 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD17",
+ "name": "Foreign Inward Remittances",
+ "cadence": "monthly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd17-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD17 REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_bsg17_sheet_1",
+   "title": "BSG17-SHEET 1",
+   "unit": "units",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD17.S1.item.R8.item",
+     "label": "Individuals",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S1.R8.amount_usd",
+     "label": "Individuals",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S1.item.R9.item",
+     "label": "Exporters",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S1.R9.amount_usd",
+     "label": "Exporters",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S1.item.R10.item",
+     "label": "Service Providers",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S1.R10.amount_usd",
+     "label": "Service Providers",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S1.item.R11.item",
+     "label": "NGOs",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S1.R11.amount_usd",
+     "label": "NGOs",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S1.item.R12.item",
+     "label": "Embassies",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S1.R12.amount_usd",
+     "label": "Embassies",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S1.item.R13.item",
+     "label": "Others",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S1.R13.amount_usd",
+     "label": "Others",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S1.item.R15.item",
+     "label": "Total (1+2+3+4+5+6)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S1.R15.amount_usd",
+     "label": "Total (1+2+3+4+5+6)",
+     "kind": "value"
+    }
+   ]
+  },
+  {
+   "code": "sheet_bsd17__sheet_2",
+   "title": "BSD17 -SHEET 2",
+   "unit": "units",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD17.S2.R6.amount_usd",
+     "label": "United Kingdom",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S2.R7.amount_usd",
+     "label": "USA and Canada",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S2.R8.amount_usd",
+     "label": "European Union",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S2.R9.amount_usd",
+     "label": "ECOWAS",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S2.R10.amount_usd",
+     "label": "Rest of Africa",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S2.R11.amount_usd",
+     "label": "Others",
+     "kind": "value"
+    },
+    {
+     "code": "BSD17.S2.R12.amount_usd",
+     "label": "Total",
+     "kind": "value"
+    }
+   ]
+  }
+ ],
+ "rules": []
+}

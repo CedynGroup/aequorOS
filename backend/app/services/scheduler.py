@@ -165,14 +165,7 @@ def run_tick(session: Session, job: Job) -> None:
 
     deadline_scan_enqueued = enqueue_due_deadline_scan(session, org_id, now=now)
 
-    from app.notifications.service.notification_email_mirror import (  # noqa: PLC0415
-        enqueue_due_notification_mirror,
-        mirror_enabled,
-    )
-
-    mirror_enqueued = (
-        enqueue_due_notification_mirror(session, org_id, now=now) if mirror_enabled() else None
-    )
+    healed = _heal_self_scheduling_chains(session, org_id, now)
 
     bi_rebuilds = 0
     bi_retention_enqueued = False
@@ -211,10 +204,8 @@ def run_tick(session: Session, job: Job) -> None:
         "deadline_scan_enqueued": deadline_scan_enqueued,
         "bi_rebuilds_enqueued": bi_rebuilds,
         "bi_retention_enqueued": bi_retention_enqueued,
-        # Key present only when the SMTP mirror is configured (default off).
-        **(
-            {"notification_mirror_enqueued": mirror_enqueued} if mirror_enqueued is not None else {}
-        ),
+        # Keys present only when the tick re-seeded a chain.
+        **healed,
         # Likewise for subscriptions: a key that appeared unconditionally would
         # change every existing assertion about this dict for a feature that is
         # off, which is why the mirror's key is conditional too.
@@ -224,6 +215,26 @@ def run_tick(session: Session, job: Job) -> None:
             else {}
         ),
     }
+
+
+def _heal_self_scheduling_chains(session: Session, org_id: str, now: datetime) -> dict[str, bool]:
+    """Re-seed the chains that schedule themselves, when one was lost.
+
+    Deliveries schedule their own dispatch when published and when retried, and
+    filed returns their own status checks. The hourly tick only heals a chain whose
+    job was lost (a reclaimed or deleted job), so a pending email never waits longer
+    than an hour and a waiting return is never left unwatched. A key is present only
+    when something is pending.
+    """
+    from app.notifications.service.dispatch import ensure_scheduled  # noqa: PLC0415
+    from app.reporting.public import ensure_submission_sync  # noqa: PLC0415
+
+    healed: dict[str, bool] = {}
+    if ensure_scheduled(session, org_id, now=now):
+        healed["notification_dispatch_scheduled"] = True
+    if ensure_submission_sync(session, org_id, now=now):
+        healed["submission_sync_scheduled"] = True
+    return healed
 
 
 def _enqueue_session_purge(session: Session, org_id: str, now: datetime) -> Job | None:

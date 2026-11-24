@@ -59,14 +59,18 @@ export type TransmitPreview = Readonly<{
    * cannot tell that by counting files.
    */
   omissions: readonly string[];
+  /** The channel the submission resolves to (`reporting_gateway`, `orass_api`, …). */
+  channel?: string | null;
+  /** For the AequorOS Reporting Gateway: how many figures the signed filing carries. */
+  gatewayFigureCount?: number | null;
 }>;
 
 export const ROLE_COPY: Record<FilingRole, { label: string; tone: Tone }> = {
   signed_record: { label: 'The signed record of truth', tone: 'ok' },
   official_copy: { label: 'Official layout, values only', tone: 'plain' },
   formula_copy: {
-    label: 'Formula copy — recalculates when opened',
-    tone: 'warn',
+    label: 'Excel with the template’s live formulas — recalculates when opened',
+    tone: 'plain',
   },
   data: { label: 'Machine-readable sections', tone: 'plain' },
 };

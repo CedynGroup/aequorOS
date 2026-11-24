@@ -1,0 +1,1372 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD15A",
+ "name": "Charges — Domestic",
+ "cadence": "weekly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd15a-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD15A REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_domestic_charges_of_banks",
+   "title": "Domestic charges of banks",
+   "unit": "text",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R9.item_no",
+     "label": "COMMISSION ON TURNOVER (COT)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R10.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R11.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R12.charge",
+     "label": "Ledger Fees",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R13.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R14.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R16.item_no",
+     "label": "MAINTENANCE FEE (SAVINGS ACCOUNT)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R17.charge",
+     "label": "Above ¢2,000,000",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R18.charge",
+     "label": "BT ¢1,000,000 - ¢2,000,000",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R19.charge",
+     "label": "BT ¢500,000 - ¢1,000,000",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R20.charge",
+     "label": "Bt ¢200,000.00 - ¢500,000.00",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R21.charge",
+     "label": "Below ¢200,000.00",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R22.charge",
+     "label": "SME's",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R23.charge",
+     "label": "MIA's",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R25.item_no",
+     "label": "BANK DRAFT (PAYMENT ORDER)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R26.charge",
+     "label": "Bank's customers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R27.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R28.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R29.charge",
+     "label": "Non customers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R30.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R31.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R32.charge",
+     "label": "Cancelation of draft",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R34.item_no",
+     "label": "RETURNED CHEQUES",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R35.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R36.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R38.item_no",
+     "label": "STOPPED CHEQUES",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R39.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R40.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R41.charge",
+     "label": "Refer to Drawer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R42.charge",
+     "label": "Returned uncleared effect (insufficient funds)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R43.charge",
+     "label": "Returned uncleared effect (other reasons)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R45.item_no",
+     "label": "LOCAL TRANSFERS/REMITTANCES",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R46.charge",
+     "label": "Telegraphic Transfers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R47.charge",
+     "label": "Customers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R48.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R49.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R50.charge",
+     "label": "Non Customers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R51.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R52.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R54.charge",
+     "label": "Cable",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R55.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R56.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R57.charge",
+     "label": "Non customers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R58.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R59.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R61.charge",
+     "label": "Mail Transfer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R62.charge",
+     "label": "Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R63.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R64.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R65.charge",
+     "label": "Non customers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R66.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R67.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R69.charge",
+     "label": "Postage",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R70.charge",
+     "label": "Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R71.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R72.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R73.charge",
+     "label": "Non customers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R74.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R75.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R77.item_no",
+     "label": "LENDING FEES",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R78.charge",
+     "label": "Commitemnt fee",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R79.charge",
+     "label": "Processing",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R80.charge",
+     "label": "Property valuation Fee (open market value)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R81.charge",
+     "label": "Guarantee Commission",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R82.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R83.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R84.charge",
+     "label": "Bid Security",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R85.charge",
+     "label": "Bank Credit Letter (Letter of Intent)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R86.charge",
+     "label": "Mobilisation Guarantee",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R87.charge",
+     "label": "Retention Guaratee",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R88.charge",
+     "label": "Performance Bond",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R89.charge",
+     "label": "Default or restructured",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R90.charge",
+     "label": "Salary Credit Processing Fee",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R91.charge",
+     "label": "Overdraft Processing or Renewal Fee",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R92.charge",
+     "label": "Revolving Acceptance Credit",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R93.charge",
+     "label": "Arrangement Fee for Facilities",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R95.item_no",
+     "label": "STATEMENTS",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R96.charge",
+     "label": "Monthly",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R97.charge",
+     "label": "Screen printed",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R98.charge",
+     "label": "Duplicate (per sheet)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R99.charge",
+     "label": "Certificate of Balance (per sheet)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R100.charge",
+     "label": "Enquiries bt 1 year and 3 yrs (per sheet)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R101.charge",
+     "label": "Enquiries 3yrs and above (per sheet)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R102.charge",
+     "label": "Auditors Questionnaire",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R104.item_no",
+     "label": "SPECIAL CLEARING",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R105.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R106.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R108.item_no",
+     "label": "CLEARING",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R109.charge",
+     "label": "Bank's cheques",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R110.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R111.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R112.charge",
+     "label": "Country Clearing",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R113.charge",
+     "label": "Other banks cheques",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R114.charge",
+     "label": "Mimimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R115.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R117.charge",
+     "label": "Other Bank's cheques marked",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R118.charge",
+     "label": "Commission on Drawer's A/c",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R119.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R120.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R122.charge",
+     "label": "Interbranch Clearing (Bank's Cheques)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R123.charge",
+     "label": "Bank's branches",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R124.charge",
+     "label": "Other bank's Presentation: Marked Comm. A/c Drawer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R125.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R126.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R127.charge",
+     "label": "No commission mark (Comm borne by payee)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R128.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R129.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R131.charge",
+     "label": "Interbranch Clearing (Other Bank's Cheques)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R132.charge",
+     "label": "No commission mark(Comm borne by payee)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R133.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R134.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R135.charge",
+     "label": "Marked Comm.A/c Drawer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R136.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R137.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R139.charge",
+     "label": "Cheque Withdrawal Outside Drawee Branch by Phone/Radio",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R140.charge",
+     "label": "Customer",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R141.charge",
+     "label": "Minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R142.charge",
+     "label": "Maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R144.item_no",
+     "label": "OUTSIDE ZONE CHEQUE PURCHASED",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R145.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R146.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R148.item_no",
+     "label": "CHEQUE FOR COLLECTION",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R149.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R150.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R152.item_no",
+     "label": "STANDING ORDERS",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R153.charge",
+     "label": "Internal",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R154.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R155.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R156.charge",
+     "label": "External",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R157.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R158.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R160.item_no",
+     "label": "SALARY TRANSFERS",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R161.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R162.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R164.charge",
+     "label": "Non Salary Transfers",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R165.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R166.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R168.item_no",
+     "label": "SALARY PROCESSING FEE",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R169.charge",
+     "label": "Internal",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R170.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R171.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R172.charge",
+     "label": "External",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R173.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R174.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R176.item_no",
+     "label": "PENSION PROCESSING FEE",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R177.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R178.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R180.item_no",
+     "label": "UNPAID STANDING ORDER",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R181.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R182.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R184.item_no",
+     "label": "CLOSURE OF ACCOUNTS",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R185.charge",
+     "label": "Savings a/c",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R186.charge",
+     "label": "Current a/c",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R188.item_no",
+     "label": "SAFE CUSTODY (Account holders only)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R189.charge",
+     "label": "Envelopes (per quarter)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R190.charge",
+     "label": "Boxes (per quarter)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R191.charge",
+     "label": "Parcels",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R192.charge",
+     "label": "Others",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R194.item_no",
+     "label": "CHEQUE AND SAVINGS PASS BOOKS",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R195.charge",
+     "label": "Personal Accounts (25 leaflets)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R196.charge",
+     "label": "Personal Accounts (50 leaflets)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R197.charge",
+     "label": "Corporate Accounts (50 Leaflets)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R198.charge",
+     "label": "Corporate Accounts (100 Leaflets)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R199.charge",
+     "label": "Plus Stamp Duty ( per Leaflet)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R200.charge",
+     "label": "Cheque voucher retrieval",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R201.charge",
+     "label": "Sale of cheque leaflet",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R202.charge",
+     "label": "Replacement of Lost Savings Pass Book",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R204.item_no",
+     "label": "ATM",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R205.charge",
+     "label": "Issuing",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R206.charge",
+     "label": "Cash Machine withdrawal",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R207.charge",
+     "label": "Replacement of lost/damage card",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R208.charge",
+     "label": "Replacement of PIN",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R209.charge",
+     "label": "Transaction fee per withdrawal",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.ITEM.R211.item_no",
+     "label": "SIKA CARD",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R212.charge",
+     "label": "Loading Fee: per ¢100,000",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R213.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R214.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R217.charge",
+     "label": "First time purchaser",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R218.charge",
+     "label": "Lost/debased cards",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R219.charge",
+     "label": "Card replacement",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R220.charge",
+     "label": "Card extension",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R222.charge",
+     "label": "Sika Card - Merchants",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R223.charge",
+     "label": "License/Insurance Fee (per month)",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R225.charge",
+     "label": "Sika Card - Cash Back",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R226.charge",
+     "label": "Above ¢10 million: per ¢100,000",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R227.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R228.charge",
+     "label": "maximum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R229.charge",
+     "label": "Below ¢10 million: per ¢100,000",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R230.charge",
+     "label": "minimum",
+     "kind": "text"
+    },
+    {
+     "code": "BSD15A.DOMESTIC.R231.charge",
+     "label": "maximum",
+     "kind": "text"
+    }
+   ]
+  },
+  {
+   "code": "sheet_range_of_pdts_i_r_o_sav___cur",
+   "title": "Range of pdts i.r.o sav & cur ",
+   "unit": "units",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD15A.RANGE.R13.amount",
+     "label": "Initial Deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R14.amount",
+     "label": "Minimum Operating Bal",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R15.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R17.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R18.amount",
+     "label": "Transaction fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R19.amount",
+     "label": "Dormant Account Maintenance Fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R22.amount",
+     "label": "Initial Deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R23.amount",
+     "label": "Minimum Operating Bal",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R24.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R26.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R27.amount",
+     "label": "Transaction fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R28.amount",
+     "label": "Dormant Account Maintenance Fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R31.amount",
+     "label": "Initial Deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R32.amount",
+     "label": "Minimum Operating Bal",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R33.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R35.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R36.amount",
+     "label": "Transaction fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R37.amount",
+     "label": "Dormant Account Maintenance Fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R40.amount",
+     "label": "Initial Deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R41.amount",
+     "label": "Minimum Operating Bal",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R42.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R44.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R45.amount",
+     "label": "Transaction fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R46.amount",
+     "label": "Dormant Account Maintenance Fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R49.amount",
+     "label": "Initial Deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R50.amount",
+     "label": "Minimum Operating Bal",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R51.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R53.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R54.amount",
+     "label": "Transaction fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R55.amount",
+     "label": "Dormant Account Maintenance Fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R58.amount",
+     "label": "Initial Deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R59.amount",
+     "label": "Minimum Operating Bal",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R60.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R62.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R63.amount",
+     "label": "Transaction fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R64.amount",
+     "label": "Cash Machine withdrawal fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R65.amount",
+     "label": "Dormant Account Maintenance Fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R68.amount",
+     "label": "Initial Deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R69.amount",
+     "label": "Minimum Operating Bal",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R70.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R72.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R73.amount",
+     "label": "Transaction fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R74.amount",
+     "label": "Dormant Account Maintenance Fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R77.amount",
+     "label": "Initial Deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R78.amount",
+     "label": "Minimum Operating Bal",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R79.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R80.amount",
+     "label": "Transaction fee per non clearing debit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R81.amount",
+     "label": "Transaction fee for cheques below ¢500,000",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R82.amount",
+     "label": "Cash Machine withdrawal fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R83.amount",
+     "label": "COT Applicable",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R84.amount",
+     "label": "Dormant Account Maintenance Fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R88.amount",
+     "label": "Initial Deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R89.amount",
+     "label": "Minimum Operating Bal",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R90.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R91.amount",
+     "label": "Transaction fee per non clearing debit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R92.amount",
+     "label": "Cash Machine withdrawal fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R94.amount",
+     "label": "Transaction fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R95.amount",
+     "label": "COT Applicable",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R96.amount",
+     "label": "Dormant Account Maintenance Fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R99.amount",
+     "label": "Initial Deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R100.amount",
+     "label": "Minimum Operating Bal",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R101.amount",
+     "label": "Maintenance fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R102.amount",
+     "label": "Transaction fee per non clearing debit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R103.amount",
+     "label": "Cash Machine withdrawal fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R105.amount",
+     "label": "Transaction fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R106.amount",
+     "label": "COT Applicable",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R107.amount",
+     "label": "Dormant Account Maintenance Fee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R110.amount",
+     "label": "Foreign Currency Account",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R111.amount",
+     "label": "Initial Deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R112.amount",
+     "label": "Minimum Operating Balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R113.amount",
+     "label": "Interest Payable",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R114.amount",
+     "label": "Maintenance charges",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R116.amount",
+     "label": "Foreign Exchange Account",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R117.amount",
+     "label": "Initial Deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R118.amount",
+     "label": "Minimum Operating Balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R119.amount",
+     "label": "Interest Payable",
+     "kind": "value"
+    },
+    {
+     "code": "BSD15A.RANGE.R120.amount",
+     "label": "Maintenance charges",
+     "kind": "value"
+    }
+   ]
+  }
+ ],
+ "rules": []
+}

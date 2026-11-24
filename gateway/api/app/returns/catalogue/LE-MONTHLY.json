@@ -1,0 +1,274 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "LE-MONTHLY",
+ "name": "Large Exposures Return (Templates 1/1a/2/3/4)",
+ "cadence": "monthly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-le-monthly-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": null
+ },
+ "sections": [
+  {
+   "code": "template_1",
+   "title": "LE Template 1 Large Exposures",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "connection",
+     "label": "Single / Group of Connected",
+     "kind": "text",
+     "unit": "units"
+    },
+    {
+     "key": "tin",
+     "label": "Counterparty TIN / Ghana Card No.",
+     "kind": "text",
+     "unit": "units"
+    },
+    {
+     "key": "drawn_ghs",
+     "label": "Drawn Down (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "undrawn_ccf_ghs",
+     "label": "Undrawn & Contingent after CCF (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "value",
+     "label": "Total Exposure (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "pct_nof",
+     "label": "% of Exposure Value to NOF",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "ifrs9_stage",
+     "label": "IFRS Staging",
+     "kind": "text",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "template_1a",
+   "title": "LE Template 1a Connected",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "group_reference",
+     "label": "Group of Connected Counterparties",
+     "kind": "text",
+     "unit": "units"
+    },
+    {
+     "key": "basis_of_connection",
+     "label": "Basis of Connection",
+     "kind": "text",
+     "unit": "units"
+    },
+    {
+     "key": "tin",
+     "label": "Counterparty TIN / Ghana Card No.",
+     "kind": "text",
+     "unit": "units"
+    },
+    {
+     "key": "value",
+     "label": "Total Exposure (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "template_2",
+   "title": "LE Template 2 Top 100",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "connection",
+     "label": "Single / Group of Connected",
+     "kind": "text",
+     "unit": "units"
+    },
+    {
+     "key": "tin",
+     "label": "Counterparty TIN / Ghana Card No.",
+     "kind": "text",
+     "unit": "units"
+    },
+    {
+     "key": "drawn_ghs",
+     "label": "Drawn Down (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "undrawn_ccf_ghs",
+     "label": "Undrawn & Contingent after CCF (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "value",
+     "label": "Total Exposure (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "provisions_ghs",
+     "label": "Specific Loan Loss Provisions (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "ifrs9_stage",
+     "label": "IFRS Staging",
+     "kind": "text",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "template_3",
+   "title": "LE Template 3 Exempted",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "tin",
+     "label": "Counterparty TIN / Ghana Card No.",
+     "kind": "text",
+     "unit": "units"
+    },
+    {
+     "key": "exempt_basis",
+     "label": "Exemption Basis",
+     "kind": "text",
+     "unit": "units"
+    },
+    {
+     "key": "drawn_ghs",
+     "label": "Drawn Down (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "undrawn_ccf_ghs",
+     "label": "Undrawn & Contingent after CCF (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "value",
+     "label": "Total Exposure pre-CRM (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "pct_nof",
+     "label": "% of Exposure Value to NOF",
+     "kind": "number",
+     "unit": "percent"
+    }
+   ]
+  },
+  {
+   "code": "template_4",
+   "title": "LE Template 4 Other Pre-CRM",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "tin",
+     "label": "Counterparty TIN / Ghana Card No.",
+     "kind": "text",
+     "unit": "units"
+    },
+    {
+     "key": "value",
+     "label": "Exposure pre-CRM (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "pct_nof",
+     "label": "% of Exposure Value to NOF",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "ifrs9_stage",
+     "label": "IFRS Staging",
+     "kind": "text",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "totals",
+   "title": "Headline totals",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Value",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "LE-MONTHLY-STR-001",
+   "severity": "error",
+   "kind": "present",
+   "section": "template_1",
+   "description": "LE Template 1 Large Exposures is reported"
+  },
+  {
+   "id": "LE-MONTHLY-STR-002",
+   "severity": "error",
+   "kind": "present",
+   "section": "template_2",
+   "description": "LE Template 2 Top 100 is reported"
+  },
+  {
+   "id": "LE-MONTHLY-STR-003",
+   "severity": "error",
+   "kind": "present",
+   "section": "template_3",
+   "description": "LE Template 3 Exempted is reported"
+  },
+  {
+   "id": "LE-MONTHLY-STR-004",
+   "severity": "error",
+   "kind": "present",
+   "section": "template_4",
+   "description": "LE Template 4 Other Pre-CRM is reported"
+  }
+ ]
+}

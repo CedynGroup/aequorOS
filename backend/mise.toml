@@ -26,7 +26,10 @@ RUN_INPROCESS_WORKER=0 uv run python -m app.worker &
 worker_pid=$!
 trap 'kill "$worker_pid" 2>/dev/null || true' EXIT INT TERM
 
-RUN_INPROCESS_WORKER=0 uv run fastapi dev app/main.py --host "${HOST:-127.0.0.1}" --port "${PORT:-8001}" --reload-dir app
+# A code change reloads the API. Uvicorn waits for in-flight requests before the new
+# process starts; without a bound, one slow request held a reload (and every new
+# request) for over ten minutes. Twenty seconds is the most a reload may wait.
+RUN_INPROCESS_WORKER=0 uv run uvicorn app.main:app --reload --reload-dir app --host "${HOST:-127.0.0.1}" --port "${PORT:-8001}" --timeout-graceful-shutdown 20
 '''
 
 [tasks."risk-service:worker"]

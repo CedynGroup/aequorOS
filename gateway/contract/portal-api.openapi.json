@@ -1,0 +1,6808 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AequorOS Reporting Gateway — Supervisor API",
+    "version": "0.1.0",
+    "description": "The BoG supervisor API (SPEC.md Part 3) behind the portal. Bearer: the BoG identity provider's ID token."
+  },
+  "paths": {
+    "/portal/api/me": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Me",
+        "operationId": "me_portal_api_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ]
+      }
+    },
+    "/portal/api/overview": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Get Overview",
+        "operationId": "get_overview_portal_api_overview_get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reporting_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reporting Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Overview"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/submissions": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Get Submissions",
+        "operationId": "get_submissions_portal_api_submissions_get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "needs_review",
+                    "validating",
+                    "rejected",
+                    "queried",
+                    "accepted"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "return_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Return Code"
+            }
+          },
+          {
+            "name": "institution_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Institution Code"
+            }
+          },
+          {
+            "name": "reporting_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reporting Date"
+            }
+          },
+          {
+            "name": "channel",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "api",
+                    "portal_upload"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__portal__submissions__SubmissionList"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/submissions/{receipt_id}": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Get Submission",
+        "operationId": "get_submission_portal_api_submissions__receipt_id__get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "receipt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Receipt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/submissions/{receipt_id}/receipt": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Download Receipt",
+        "description": "The filing's signed receipt, exactly as the institution's own API returns it.",
+        "operationId": "download_receipt_portal_api_submissions__receipt_id__receipt_get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "receipt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Receipt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/submissions/{receipt_id}/package": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Download Package",
+        "description": "The filing as received: signed manifest, payload, declaration, receipt and keys.",
+        "operationId": "download_package_portal_api_submissions__receipt_id__package_get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "receipt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Receipt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/zip": {}
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/submissions/{receipt_id}/documents/{name}": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Download Document",
+        "description": "One document filed with the return (Excel, CSV or PDF), byte for byte.",
+        "operationId": "download_document_portal_api_submissions__receipt_id__documents__name__get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "receipt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Receipt Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/octet-stream": {}
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/submissions/{receipt_id}/accept": {
+      "post": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Accept Submission",
+        "operationId": "accept_submission_portal_api_submissions__receipt_id__accept_post",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "receipt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Receipt Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AcceptIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/submissions/{receipt_id}/resubmission-request": {
+      "post": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Resubmission",
+        "operationId": "resubmission_portal_api_submissions__receipt_id__resubmission_request_post",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "receipt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Receipt Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResubmissionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/submissions/{receipt_id}/assign": {
+      "post": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Assign Submission",
+        "operationId": "assign_submission_portal_api_submissions__receipt_id__assign_post",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "receipt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Receipt Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/queries": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Get Queries",
+        "operationId": "get_queries_portal_api_queries_get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "open",
+                "awaiting_institution",
+                "awaiting_supervisor",
+                "closed"
+              ],
+              "type": "string",
+              "default": "open",
+              "title": "Status"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryListOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Create Query",
+        "operationId": "create_query_portal_api_queries_post",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenQueryIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/queries/{number}": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Get Query",
+        "operationId": "get_query_portal_api_queries__number__get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryDetailOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/queries/{number}/messages": {
+      "post": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Add Message",
+        "operationId": "add_message_portal_api_queries__number__messages_post",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffMessageIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryMessageOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/queries/{number}/close": {
+      "post": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Close",
+        "operationId": "close_portal_api_queries__number__close_post",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Number"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/institutions": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Get Institutions",
+        "operationId": "get_institutions_portal_api_institutions_get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstitutionList"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/institutions/{code}": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Get Institution",
+        "operationId": "get_institution_portal_api_institutions__code__get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstitutionDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/institutions/{code}/notes": {
+      "post": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Post Note",
+        "operationId": "post_note_portal_api_institutions__code__notes_post",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Note"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/onboarding": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "The institutions on the channel (read-only; enrolment is the operator's)",
+        "operationId": "get_onboarding_portal_api_onboarding_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Onboarding"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ]
+      }
+    },
+    "/portal/api/calendar": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Get Calendar",
+        "operationId": "get_calendar_portal_api_calendar_get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/returns": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Get Returns",
+        "operationId": "get_returns_portal_api_returns_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortalReturnList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ]
+      }
+    },
+    "/portal/api/returns/{code}": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Get Return",
+        "operationId": "get_return_portal_api_returns__code__get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortalReturnDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/returns/{code}/drafts": {
+      "post": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Post Draft",
+        "operationId": "post_draft_portal_api_returns__code__drafts_post",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/returns/{code}/versions/{version}/approve": {
+      "post": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Post Approve",
+        "operationId": "post_approve_portal_api_returns__code__versions__version__approve_post",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/returns/{code}/versions/{version}/return": {
+      "post": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Post Return",
+        "operationId": "post_return_portal_api_returns__code__versions__version__return_post",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Version"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/audit": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Get Audit",
+        "operationId": "get_audit_portal_api_audit_get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "actor_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "staff",
+                    "institution",
+                    "system",
+                    "operator"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Actor Type"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "name": "institution_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Institution Code"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditList"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/audit/export": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Get Export",
+        "operationId": "get_export_portal_api_audit_export_get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/zip": {}
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/audit/{seq}": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Get Audit Entry",
+        "operationId": "get_audit_entry_portal_api_audit__seq__get",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "seq",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Seq"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditEntryOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/audit/verify": {
+      "post": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Post Verify",
+        "operationId": "post_verify_portal_api_audit_verify_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ]
+      }
+    },
+    "/portal/api/access": {
+      "get": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Get Access",
+        "operationId": "get_access_portal_api_access_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ]
+      }
+    },
+    "/portal/api/access/requests/{number}/approve": {
+      "post": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Post Access Approve",
+        "operationId": "post_access_approve_portal_api_access_requests__number__approve_post",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/portal/api/access/requests/{number}/deny": {
+      "post": {
+        "tags": [
+          "Supervisor API"
+        ],
+        "summary": "Post Access Deny",
+        "operationId": "post_access_deny_portal_api_access_requests__number__deny_post",
+        "security": [
+          {
+            "StaffIdToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DenyIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AcceptIn": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "AcceptIn"
+      },
+      "AccessView": {
+        "properties": {
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/RoleRow"
+            },
+            "type": "array",
+            "title": "Roles"
+          },
+          "pending": {
+            "items": {
+              "$ref": "#/components/schemas/PendingRow"
+            },
+            "type": "array",
+            "title": "Pending"
+          },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionRow"
+            },
+            "type": "array",
+            "title": "Sessions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "roles",
+          "pending",
+          "sessions"
+        ],
+        "title": "AccessView"
+      },
+      "ActivityItem": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "at",
+          "title",
+          "detail"
+        ],
+        "title": "ActivityItem"
+      },
+      "Amendment": {
+        "properties": {
+          "supersedes_receipt_id": {
+            "type": "string",
+            "title": "Supersedes Receipt Id"
+          },
+          "supersedes_received_at": {
+            "type": "string",
+            "title": "Supersedes Received At"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "supersedes_receipt_id",
+          "supersedes_received_at",
+          "reason"
+        ],
+        "title": "Amendment"
+      },
+      "ApiClientOut": {
+        "properties": {
+          "client_id": {
+            "type": "string",
+            "title": "Client Id"
+          },
+          "certificate_not_after": {
+            "type": "string",
+            "title": "Certificate Not After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "client_id",
+          "certificate_not_after"
+        ],
+        "title": "ApiClientOut"
+      },
+      "ApprovalStep": {
+        "properties": {
+          "step": {
+            "type": "string",
+            "enum": [
+              "drafted",
+              "approved",
+              "pending"
+            ],
+            "title": "Step"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "role_label": {
+            "type": "string",
+            "title": "Role Label"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "step",
+          "by",
+          "role_label",
+          "at"
+        ],
+        "title": "ApprovalStep"
+      },
+      "ApproveIn": {
+        "properties": {
+          "duration_minutes": {
+            "type": "integer",
+            "enum": [
+              30,
+              60,
+              120
+            ],
+            "title": "Duration Minutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "duration_minutes"
+        ],
+        "title": "ApproveIn"
+      },
+      "AssignIn": {
+        "properties": {
+          "reviewer_subject": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Reviewer Subject"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reviewer_subject"
+        ],
+        "title": "AssignIn"
+      },
+      "AttentionItem": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "outstanding",
+              "rejected",
+              "queried",
+              "late",
+              "credential"
+            ],
+            "title": "Kind"
+          },
+          "when": {
+            "type": "string",
+            "title": "When"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "link": {
+            "$ref": "#/components/schemas/AttentionLink"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "when",
+          "title",
+          "detail",
+          "link"
+        ],
+        "title": "AttentionItem"
+      },
+      "AttentionLink": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "submission",
+              "institution",
+              "query",
+              "onboarding"
+            ],
+            "title": "Type"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "ref"
+        ],
+        "title": "AttentionLink"
+      },
+      "AuditEntryOut": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "occurred_at": {
+            "type": "string",
+            "title": "Occurred At"
+          },
+          "actor_label": {
+            "type": "string",
+            "title": "Actor Label"
+          },
+          "actor_via": {
+            "type": "string",
+            "title": "Actor Via"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "object_ref": {
+            "type": "string",
+            "title": "Object Ref"
+          },
+          "detail": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Detail"
+          },
+          "prev_hash": {
+            "type": "string",
+            "title": "Prev Hash"
+          },
+          "entry_hash": {
+            "type": "string",
+            "title": "Entry Hash"
+          },
+          "signature_kid": {
+            "type": "string",
+            "title": "Signature Kid"
+          },
+          "signature_valid": {
+            "type": "boolean",
+            "title": "Signature Valid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seq",
+          "occurred_at",
+          "actor_label",
+          "actor_via",
+          "category",
+          "action",
+          "object_ref",
+          "detail",
+          "prev_hash",
+          "entry_hash",
+          "signature_kid",
+          "signature_valid"
+        ],
+        "title": "AuditEntryOut"
+      },
+      "AuditList": {
+        "properties": {
+          "integrity": {
+            "$ref": "#/components/schemas/Integrity"
+          },
+          "siem": {
+            "$ref": "#/components/schemas/Siem"
+          },
+          "retention_label": {
+            "type": "string",
+            "title": "Retention Label"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditRow"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "integrity",
+          "siem",
+          "retention_label",
+          "items",
+          "next_cursor"
+        ],
+        "title": "AuditList"
+      },
+      "AuditRow": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "occurred_at": {
+            "type": "string",
+            "title": "Occurred At"
+          },
+          "actor_label": {
+            "type": "string",
+            "title": "Actor Label"
+          },
+          "actor_via": {
+            "type": "string",
+            "title": "Actor Via"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "object_ref": {
+            "type": "string",
+            "title": "Object Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seq",
+          "occurred_at",
+          "actor_label",
+          "actor_via",
+          "category",
+          "action",
+          "object_ref"
+        ],
+        "title": "AuditRow"
+      },
+      "CadenceCount": {
+        "properties": {
+          "cadence": {
+            "type": "string",
+            "title": "Cadence"
+          },
+          "returns": {
+            "type": "integer",
+            "title": "Returns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cadence",
+          "returns"
+        ],
+        "title": "CadenceCount"
+      },
+      "CalendarDay": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "title": "Date"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/CalendarEvent"
+            },
+            "type": "array",
+            "title": "Events"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "events"
+        ],
+        "title": "CalendarDay"
+      },
+      "CalendarEvent": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "past",
+              "warning",
+              "future"
+            ],
+            "title": "Tone"
+          },
+          "received": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received"
+          },
+          "due": {
+            "type": "integer",
+            "title": "Due"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "detail",
+          "tone",
+          "received",
+          "due"
+        ],
+        "title": "CalendarEvent"
+      },
+      "CalendarOut": {
+        "properties": {
+          "month": {
+            "type": "string",
+            "title": "Month"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/CalendarDay"
+            },
+            "type": "array",
+            "title": "Days"
+          },
+          "upcoming": {
+            "items": {
+              "$ref": "#/components/schemas/Upcoming"
+            },
+            "type": "array",
+            "title": "Upcoming"
+          },
+          "cadences": {
+            "items": {
+              "$ref": "#/components/schemas/CadenceCount"
+            },
+            "type": "array",
+            "title": "Cadences"
+          }
+        },
+        "type": "object",
+        "required": [
+          "month",
+          "days",
+          "upcoming",
+          "cadences"
+        ],
+        "title": "CalendarOut"
+      },
+      "CertificateEvidence": {
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "title": "Valid"
+          },
+          "not_after": {
+            "type": "string",
+            "title": "Not After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valid",
+          "not_after"
+        ],
+        "title": "CertificateEvidence"
+      },
+      "ChannelStatus": {
+        "properties": {
+          "api_availability_30d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Availability 30D"
+          },
+          "median_receipt_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Receipt Seconds"
+          },
+          "filings_today": {
+            "type": "integer",
+            "title": "Filings Today"
+          },
+          "certificates_expiring_30d": {
+            "type": "integer",
+            "title": "Certificates Expiring 30D"
+          }
+        },
+        "type": "object",
+        "required": [
+          "api_availability_30d",
+          "median_receipt_seconds",
+          "filings_today",
+          "certificates_expiring_30d"
+        ],
+        "title": "ChannelStatus"
+      },
+      "CompareRule": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "kind": {
+            "type": "string",
+            "const": "compare",
+            "title": "Kind"
+          },
+          "left": {
+            "type": "string",
+            "title": "Left"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              ">=",
+              "<=",
+              "=="
+            ],
+            "title": "Op"
+          },
+          "right": {
+            "type": "string",
+            "title": "Right",
+            "description": "A line code"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "kind",
+          "left",
+          "op",
+          "right",
+          "description"
+        ],
+        "title": "CompareRule"
+      },
+      "Contact": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "name"
+        ],
+        "title": "Contact"
+      },
+      "Content": {
+        "properties": {
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/ContentSection"
+            },
+            "type": "array",
+            "title": "Sections"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ContentLine"
+            },
+            "type": "array",
+            "title": "Lines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "currency",
+          "unit",
+          "sections",
+          "lines"
+        ],
+        "title": "Content"
+      },
+      "ContentLine": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "previous_version_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Version Value"
+          },
+          "prior_period_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prior Period Value"
+          },
+          "is_total": {
+            "type": "boolean",
+            "title": "Is Total"
+          },
+          "changed": {
+            "type": "boolean",
+            "title": "Changed"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "label",
+          "value",
+          "previous_version_value",
+          "prior_period_value",
+          "is_total",
+          "changed"
+        ],
+        "title": "ContentLine",
+        "description": "One filed line. Figures are exact decimal strings; ``null`` is a blank cell."
+      },
+      "ContentSection": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "title",
+          "unit"
+        ],
+        "title": "ContentSection"
+      },
+      "Credentials": {
+        "properties": {
+          "portal_users": {
+            "type": "integer",
+            "title": "Portal Users"
+          },
+          "mfa": {
+            "type": "boolean",
+            "title": "Mfa"
+          },
+          "api_client": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ApiClientOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "signing_keys": {
+            "items": {
+              "$ref": "#/components/schemas/SigningKeyOut"
+            },
+            "type": "array",
+            "title": "Signing Keys"
+          }
+        },
+        "type": "object",
+        "required": [
+          "portal_users",
+          "mfa",
+          "api_client",
+          "signing_keys"
+        ],
+        "title": "Credentials"
+      },
+      "CrossEqualRule": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "kind": {
+            "type": "string",
+            "const": "cross_equal",
+            "title": "Kind"
+          },
+          "line": {
+            "type": "string",
+            "title": "Line"
+          },
+          "other_return": {
+            "type": "string",
+            "title": "Other Return"
+          },
+          "other_line": {
+            "type": "string",
+            "title": "Other Line"
+          },
+          "tolerance": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Tolerance",
+            "default": 0
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "kind",
+          "line",
+          "other_return",
+          "other_line",
+          "description"
+        ],
+        "title": "CrossEqualRule"
+      },
+      "DeclarationOut": {
+        "properties": {
+          "prepared_by_role": {
+            "type": "string",
+            "title": "Prepared By Role"
+          },
+          "approved_by_role": {
+            "type": "string",
+            "title": "Approved By Role"
+          },
+          "approved_at": {
+            "type": "string",
+            "title": "Approved At"
+          },
+          "software": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prepared_by_role",
+          "approved_by_role",
+          "approved_at",
+          "software"
+        ],
+        "title": "DeclarationOut"
+      },
+      "DenyIn": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "DenyIn"
+      },
+      "DraftIn": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "pattern": "^\\d{4}\\.\\d{1,3}$",
+            "title": "Version"
+          },
+          "change_summary": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Change Summary"
+          },
+          "first_reporting_date": {
+            "type": "string",
+            "format": "date",
+            "title": "First Reporting Date"
+          },
+          "notice_days": {
+            "type": "integer",
+            "maximum": 730.0,
+            "minimum": 0.0,
+            "title": "Notice Days"
+          },
+          "schema": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Schema"
+          },
+          "rules": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SumRule"
+                },
+                {
+                  "$ref": "#/components/schemas/NonNegativeRule"
+                },
+                {
+                  "$ref": "#/components/schemas/CompareRule"
+                },
+                {
+                  "$ref": "#/components/schemas/CrossEqualRule"
+                },
+                {
+                  "$ref": "#/components/schemas/VarianceRule"
+                },
+                {
+                  "$ref": "#/components/schemas/PresentRule"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "kind",
+                "mapping": {
+                  "compare": "#/components/schemas/CompareRule",
+                  "cross_equal": "#/components/schemas/CrossEqualRule",
+                  "non_negative": "#/components/schemas/NonNegativeRule",
+                  "present": "#/components/schemas/PresentRule",
+                  "sum": "#/components/schemas/SumRule",
+                  "variance": "#/components/schemas/VarianceRule"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Rules"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "change_summary",
+          "first_reporting_date",
+          "notice_days",
+          "schema",
+          "rules"
+        ],
+        "title": "DraftIn"
+      },
+      "DraftOut": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "change_summary": {
+            "type": "string",
+            "title": "Change Summary"
+          },
+          "first_reporting_date": {
+            "type": "string",
+            "title": "First Reporting Date"
+          },
+          "notice_days": {
+            "type": "integer",
+            "title": "Notice Days"
+          },
+          "breaking": {
+            "type": "boolean",
+            "title": "Breaking"
+          },
+          "approvals": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalStep"
+            },
+            "type": "array",
+            "title": "Approvals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "change_summary",
+          "first_reporting_date",
+          "notice_days",
+          "breaking",
+          "approvals"
+        ],
+        "title": "DraftOut"
+      },
+      "Evidence": {
+        "properties": {
+          "receipt_id": {
+            "type": "string",
+            "title": "Receipt Id"
+          },
+          "payload_sha256": {
+            "type": "string",
+            "title": "Payload Sha256"
+          },
+          "signature": {
+            "$ref": "#/components/schemas/SignatureEvidence"
+          },
+          "certificate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CertificateEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "receipt_signature": {
+            "$ref": "#/components/schemas/ReceiptSignature"
+          },
+          "received_at": {
+            "type": "string",
+            "title": "Received At"
+          },
+          "ledger_seq": {
+            "type": "integer",
+            "title": "Ledger Seq"
+          },
+          "chain_intact": {
+            "type": "boolean",
+            "title": "Chain Intact"
+          }
+        },
+        "type": "object",
+        "required": [
+          "receipt_id",
+          "payload_sha256",
+          "signature",
+          "certificate",
+          "receipt_signature",
+          "received_at",
+          "ledger_seq",
+          "chain_intact"
+        ],
+        "title": "Evidence"
+      },
+      "FiledDocument": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "media_type": {
+            "type": "string",
+            "title": "Media Type"
+          },
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "bytes": {
+            "type": "integer",
+            "title": "Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "media_type",
+          "sha256",
+          "bytes"
+        ],
+        "title": "FiledDocument",
+        "description": "A document filed with the return; its digest is in the signed manifest."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HeatCell": {
+        "properties": {
+          "return_code": {
+            "type": "string",
+            "title": "Return Code"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "on_time",
+              "late",
+              "outstanding",
+              "not_due"
+            ],
+            "title": "State"
+          },
+          "receipt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "return_code",
+          "state",
+          "receipt_id"
+        ],
+        "title": "HeatCell"
+      },
+      "HeatRow": {
+        "properties": {
+          "institution_code": {
+            "type": "string",
+            "title": "Institution Code"
+          },
+          "institution_name": {
+            "type": "string",
+            "title": "Institution Name"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/HeatCell"
+            },
+            "type": "array",
+            "title": "Cells"
+          },
+          "received": {
+            "type": "integer",
+            "title": "Received"
+          },
+          "due": {
+            "type": "integer",
+            "title": "Due"
+          }
+        },
+        "type": "object",
+        "required": [
+          "institution_code",
+          "institution_name",
+          "cells",
+          "received",
+          "due"
+        ],
+        "title": "HeatRow"
+      },
+      "Heatmap": {
+        "properties": {
+          "return_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Return Codes"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/HeatRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "return_codes",
+          "rows"
+        ],
+        "title": "Heatmap"
+      },
+      "History": {
+        "properties": {
+          "months": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Months"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "months",
+          "rows"
+        ],
+        "title": "History"
+      },
+      "HistoryCell": {
+        "properties": {
+          "reporting_date": {
+            "type": "string",
+            "title": "Reporting Date"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "on_time",
+              "late",
+              "outstanding",
+              "not_due"
+            ],
+            "title": "State"
+          },
+          "receipt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reporting_date",
+          "state",
+          "receipt_id"
+        ],
+        "title": "HistoryCell"
+      },
+      "HistoryRow": {
+        "properties": {
+          "return_code": {
+            "type": "string",
+            "title": "Return Code"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryCell"
+            },
+            "type": "array",
+            "title": "Cells"
+          }
+        },
+        "type": "object",
+        "required": [
+          "return_code",
+          "cells"
+        ],
+        "title": "HistoryRow"
+      },
+      "InstitutionDetail": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "api",
+                  "portal_upload"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/InstitutionStats"
+          },
+          "history": {
+            "$ref": "#/components/schemas/History"
+          },
+          "obligations": {
+            "items": {
+              "$ref": "#/components/schemas/ObligationOut"
+            },
+            "type": "array",
+            "title": "Obligations"
+          },
+          "contacts": {
+            "items": {
+              "$ref": "#/components/schemas/Contact"
+            },
+            "type": "array",
+            "title": "Contacts"
+          },
+          "credentials": {
+            "$ref": "#/components/schemas/Credentials"
+          },
+          "supervisor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Name"
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/Note"
+            },
+            "type": "array",
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "type",
+          "channel",
+          "flags",
+          "stats",
+          "history",
+          "obligations",
+          "contacts",
+          "credentials",
+          "supervisor_name",
+          "notes"
+        ],
+        "title": "InstitutionDetail"
+      },
+      "InstitutionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InstitutionListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "InstitutionList"
+      },
+      "InstitutionListItem": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "enrolled",
+              "live",
+              "suspended"
+            ],
+            "title": "Status"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "api",
+                  "portal_upload"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "software_declared": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Declared"
+          },
+          "on_time_12m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Time 12M"
+          },
+          "outstanding": {
+            "type": "integer",
+            "title": "Outstanding"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "type",
+          "status",
+          "channel",
+          "software_declared",
+          "on_time_12m",
+          "outstanding"
+        ],
+        "title": "InstitutionListItem"
+      },
+      "InstitutionPanel": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "supervisor_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supervisor Name"
+          },
+          "cycle_received": {
+            "type": "integer",
+            "title": "Cycle Received"
+          },
+          "cycle_due": {
+            "type": "integer",
+            "title": "Cycle Due"
+          },
+          "outstanding": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Outstanding"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "type",
+          "supervisor_name",
+          "cycle_received",
+          "cycle_due",
+          "outstanding"
+        ],
+        "title": "InstitutionPanel"
+      },
+      "InstitutionStats": {
+        "properties": {
+          "on_time_12m": {
+            "type": "number",
+            "title": "On Time 12M"
+          },
+          "peer_median_on_time_12m": {
+            "type": "number",
+            "title": "Peer Median On Time 12M"
+          },
+          "outstanding": {
+            "type": "integer",
+            "title": "Outstanding"
+          },
+          "late_this_year": {
+            "type": "integer",
+            "title": "Late This Year"
+          },
+          "filings_this_year": {
+            "type": "integer",
+            "title": "Filings This Year"
+          },
+          "open_queries": {
+            "type": "integer",
+            "title": "Open Queries"
+          },
+          "last_filing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LastFiling"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "on_time_12m",
+          "peer_median_on_time_12m",
+          "outstanding",
+          "late_this_year",
+          "filings_this_year",
+          "open_queries",
+          "last_filing"
+        ],
+        "title": "InstitutionStats"
+      },
+      "Integrity": {
+        "properties": {
+          "intact": {
+            "type": "boolean",
+            "title": "Intact"
+          },
+          "entries": {
+            "type": "integer",
+            "title": "Entries"
+          },
+          "verified_at": {
+            "type": "string",
+            "title": "Verified At"
+          },
+          "head_hash": {
+            "type": "string",
+            "title": "Head Hash"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intact",
+          "entries",
+          "verified_at",
+          "head_hash"
+        ],
+        "title": "Integrity"
+      },
+      "Issue": {
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "title": "Rule Id"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "pointer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pointer"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rule_id",
+          "severity",
+          "pointer",
+          "message"
+        ],
+        "title": "Issue"
+      },
+      "JsonValue": {},
+      "LastFiling": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "title": "At"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "at",
+          "label"
+        ],
+        "title": "LastFiling"
+      },
+      "Me": {
+        "properties": {
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "roles": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "supervisor",
+                "senior_supervisor",
+                "returns_policy",
+                "access_approver",
+                "auditor"
+              ]
+            },
+            "type": "array",
+            "title": "Roles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "subject",
+          "name",
+          "email",
+          "roles"
+        ],
+        "title": "Me"
+      },
+      "NonNegativeRule": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "kind": {
+            "type": "string",
+            "const": "non_negative",
+            "title": "Kind"
+          },
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Lines"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "kind",
+          "lines",
+          "description"
+        ],
+        "title": "NonNegativeRule"
+      },
+      "Note": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "author_name": {
+            "type": "string",
+            "title": "Author Name"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "author_name",
+          "body",
+          "created_at"
+        ],
+        "title": "Note"
+      },
+      "NoteIn": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "NoteIn"
+      },
+      "NumberOut": {
+        "properties": {
+          "number": {
+            "type": "string",
+            "title": "Number"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number"
+        ],
+        "title": "NumberOut"
+      },
+      "ObligationOut": {
+        "properties": {
+          "return_code": {
+            "type": "string",
+            "title": "Return Code"
+          },
+          "return_version": {
+            "type": "string",
+            "title": "Return Version"
+          },
+          "reporting_date": {
+            "type": "string",
+            "title": "Reporting Date"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "solo",
+              "consolidated"
+            ],
+            "title": "Basis"
+          },
+          "due_at": {
+            "type": "string",
+            "title": "Due At"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_due",
+              "due",
+              "filed",
+              "filed_late",
+              "overdue"
+            ],
+            "title": "Status"
+          },
+          "receipt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "return_code",
+          "return_version",
+          "reporting_date",
+          "basis",
+          "due_at",
+          "status",
+          "receipt_id"
+        ],
+        "title": "ObligationOut"
+      },
+      "Onboarding": {
+        "properties": {
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/Stages"
+            },
+            "type": "array",
+            "title": "Stages"
+          },
+          "register": {
+            "items": {
+              "$ref": "#/components/schemas/RegisterRow"
+            },
+            "type": "array",
+            "title": "Register"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stages",
+          "register"
+        ],
+        "title": "Onboarding"
+      },
+      "OpenQueryIn": {
+        "properties": {
+          "receipt_id": {
+            "type": "string",
+            "title": "Receipt Id"
+          },
+          "subject": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Subject"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Body"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "query",
+              "resubmission"
+            ],
+            "title": "Kind"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Due At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "receipt_id",
+          "subject",
+          "body",
+          "kind",
+          "due_at"
+        ],
+        "title": "OpenQueryIn"
+      },
+      "Overview": {
+        "properties": {
+          "reporting_date": {
+            "type": "string",
+            "title": "Reporting Date"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/Totals"
+          },
+          "heatmap": {
+            "$ref": "#/components/schemas/Heatmap"
+          },
+          "attention": {
+            "items": {
+              "$ref": "#/components/schemas/AttentionItem"
+            },
+            "type": "array",
+            "title": "Attention"
+          },
+          "channel": {
+            "$ref": "#/components/schemas/ChannelStatus"
+          },
+          "latest": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionRow"
+            },
+            "type": "array",
+            "title": "Latest"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reporting_date",
+          "totals",
+          "heatmap",
+          "attention",
+          "channel",
+          "latest"
+        ],
+        "title": "Overview"
+      },
+      "PendingRow": {
+        "properties": {
+          "number": {
+            "type": "string",
+            "title": "Number"
+          },
+          "operator_name": {
+            "type": "string",
+            "title": "Operator Name"
+          },
+          "operator_title": {
+            "type": "string",
+            "title": "Operator Title"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "excludes": {
+            "type": "string",
+            "title": "Excludes"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "incident_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Incident Ref"
+          },
+          "requested_at": {
+            "type": "string",
+            "title": "Requested At"
+          },
+          "expires_at": {
+            "type": "string",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "operator_name",
+          "operator_title",
+          "scope",
+          "excludes",
+          "reason",
+          "incident_ref",
+          "requested_at",
+          "expires_at"
+        ],
+        "title": "PendingRow"
+      },
+      "PortalMessage": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "author": {
+            "type": "string",
+            "enum": [
+              "supervisor",
+              "institution",
+              "system"
+            ],
+            "title": "Author"
+          },
+          "author_label": {
+            "type": "string",
+            "title": "Author Label"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "author_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "author",
+          "author_label",
+          "body",
+          "created_at",
+          "author_role"
+        ],
+        "title": "PortalMessage"
+      },
+      "PortalReturn": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "cadence": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "quarterly",
+              "semiannual",
+              "annual"
+            ],
+            "title": "Cadence"
+          },
+          "current_version": {
+            "type": "string",
+            "title": "Current Version"
+          },
+          "applies_to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Applies To"
+          },
+          "rule_count": {
+            "type": "integer",
+            "title": "Rule Count"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "published",
+              "draft_pending"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "cadence",
+          "current_version",
+          "applies_to",
+          "rule_count",
+          "status"
+        ],
+        "title": "PortalReturn"
+      },
+      "PortalReturnDetail": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "cadence": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "quarterly",
+              "semiannual",
+              "annual"
+            ],
+            "title": "Cadence"
+          },
+          "current_version": {
+            "type": "string",
+            "title": "Current Version"
+          },
+          "applies_to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Applies To"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/ReturnVersionOut"
+            },
+            "type": "array",
+            "title": "Versions"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DraftOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "cadence",
+          "current_version",
+          "applies_to",
+          "versions",
+          "draft"
+        ],
+        "title": "PortalReturnDetail"
+      },
+      "PortalReturnList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PortalReturn"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "PortalReturnList"
+      },
+      "PresentRule": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "kind": {
+            "type": "string",
+            "const": "present",
+            "title": "Kind"
+          },
+          "section": {
+            "type": "string",
+            "title": "Section"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "kind",
+          "section",
+          "description"
+        ],
+        "title": "PresentRule",
+        "description": "An itemised section carries at least one row (lines coded ``<section>:<row>``)."
+      },
+      "Problem": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "integer",
+            "title": "Status"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "unauthenticated",
+              "certificate_required",
+              "certificate_mismatch",
+              "invalid_client_assertion",
+              "insufficient_scope",
+              "idempotency_key_required",
+              "idempotency_conflict",
+              "signing_key_unknown",
+              "signing_key_revoked",
+              "signature_invalid",
+              "manifest_mismatch",
+              "payload_digest_mismatch",
+              "declaration_digest_mismatch",
+              "document_invalid",
+              "document_digest_mismatch",
+              "institution_mismatch",
+              "return_unknown",
+              "return_version_not_applicable",
+              "schema_invalid",
+              "duplicate_submission",
+              "supersedes_not_current",
+              "amendment_reason_required",
+              "not_found",
+              "forbidden",
+              "rate_limited",
+              "conflict"
+            ],
+            "title": "Code"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "instance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance"
+          },
+          "issues": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Issue"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ],
+        "title": "Problem"
+      },
+      "QueryDetailOut": {
+        "properties": {
+          "number": {
+            "type": "string",
+            "title": "Number"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "query",
+              "resubmission"
+            ],
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "awaiting_institution",
+              "awaiting_supervisor",
+              "overdue",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "institution_code": {
+            "type": "string",
+            "title": "Institution Code"
+          },
+          "institution_name": {
+            "type": "string",
+            "title": "Institution Name"
+          },
+          "receipt_id": {
+            "type": "string",
+            "title": "Receipt Id"
+          },
+          "return_code": {
+            "type": "string",
+            "title": "Return Code"
+          },
+          "reporting_date": {
+            "type": "string",
+            "title": "Reporting Date"
+          },
+          "opened_by": {
+            "type": "string",
+            "title": "Opened By"
+          },
+          "opened_at": {
+            "type": "string",
+            "title": "Opened At"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "delivered_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivered At"
+          },
+          "acknowledged_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledged At"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/PortalMessage"
+            },
+            "type": "array",
+            "title": "Messages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "subject",
+          "kind",
+          "status",
+          "institution_code",
+          "institution_name",
+          "receipt_id",
+          "return_code",
+          "reporting_date",
+          "opened_by",
+          "opened_at",
+          "due_at",
+          "delivered_at",
+          "acknowledged_at",
+          "messages"
+        ],
+        "title": "QueryDetailOut"
+      },
+      "QueryListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/QueryRowOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "counts",
+          "next_cursor"
+        ],
+        "title": "QueryListOut"
+      },
+      "QueryMessageOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "author": {
+            "type": "string",
+            "enum": [
+              "supervisor",
+              "institution",
+              "system"
+            ],
+            "title": "Author"
+          },
+          "author_label": {
+            "type": "string",
+            "title": "Author Label"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "author",
+          "author_label",
+          "body",
+          "created_at"
+        ],
+        "title": "QueryMessageOut"
+      },
+      "QueryRowOut": {
+        "properties": {
+          "number": {
+            "type": "string",
+            "title": "Number"
+          },
+          "institution_name": {
+            "type": "string",
+            "title": "Institution Name"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "awaiting_institution",
+              "awaiting_supervisor",
+              "overdue",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "query",
+              "resubmission"
+            ],
+            "title": "Kind"
+          },
+          "return_code": {
+            "type": "string",
+            "title": "Return Code"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "last_activity_at": {
+            "type": "string",
+            "title": "Last Activity At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "institution_name",
+          "subject",
+          "status",
+          "kind",
+          "return_code",
+          "due_at",
+          "last_activity_at"
+        ],
+        "title": "QueryRowOut"
+      },
+      "ReceiptSignature": {
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "title": "Valid"
+          },
+          "kid": {
+            "type": "string",
+            "title": "Kid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valid",
+          "kid"
+        ],
+        "title": "ReceiptSignature"
+      },
+      "RegisterRow": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "api",
+                  "portal_upload"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "software_declared": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Declared"
+          },
+          "enrolled_at": {
+            "type": "string",
+            "title": "Enrolled At"
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "certificate_not_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Not After"
+          },
+          "certificate_expiring": {
+            "type": "boolean",
+            "title": "Certificate Expiring"
+          },
+          "signing_kid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signing Kid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "enrolled",
+              "live",
+              "suspended"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "type",
+          "channel",
+          "software_declared",
+          "enrolled_at",
+          "client_id",
+          "certificate_not_after",
+          "certificate_expiring",
+          "signing_kid",
+          "status"
+        ],
+        "title": "RegisterRow"
+      },
+      "ResubmissionIn": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Reason"
+          },
+          "due_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Due At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason",
+          "due_at"
+        ],
+        "title": "ResubmissionIn"
+      },
+      "ReturnIn": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "ReturnIn"
+      },
+      "ReturnVersionOut": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published",
+              "retired"
+            ],
+            "title": "Status"
+          },
+          "first_reporting_date": {
+            "type": "string",
+            "title": "First Reporting Date"
+          },
+          "last_reporting_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Reporting Date"
+          },
+          "schema_sha256": {
+            "type": "string",
+            "title": "Schema Sha256"
+          },
+          "rule_count": {
+            "type": "integer",
+            "title": "Rule Count"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "status",
+          "first_reporting_date",
+          "last_reporting_date",
+          "schema_sha256",
+          "rule_count",
+          "published_at"
+        ],
+        "title": "ReturnVersionOut"
+      },
+      "RoleRow": {
+        "properties": {
+          "group": {
+            "type": "string",
+            "title": "Group"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "supervisor",
+              "senior_supervisor",
+              "returns_policy",
+              "access_approver",
+              "auditor"
+            ],
+            "title": "Role"
+          },
+          "can": {
+            "type": "string",
+            "title": "Can"
+          },
+          "members": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Members"
+          }
+        },
+        "type": "object",
+        "required": [
+          "group",
+          "role",
+          "can",
+          "members"
+        ],
+        "title": "RoleRow"
+      },
+      "RowValidation": {
+        "properties": {
+          "passed": {
+            "type": "integer",
+            "title": "Passed"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "passed",
+          "total",
+          "failed"
+        ],
+        "title": "RowValidation"
+      },
+      "SessionRow": {
+        "properties": {
+          "number": {
+            "type": "string",
+            "title": "Number"
+          },
+          "operator_name": {
+            "type": "string",
+            "title": "Operator Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "ended",
+              "denied",
+              "expired"
+            ],
+            "title": "Status"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "operator_name",
+          "status",
+          "detail"
+        ],
+        "title": "SessionRow"
+      },
+      "Siem": {
+        "properties": {
+          "streaming": {
+            "type": "boolean",
+            "title": "Streaming"
+          },
+          "lag_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lag Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "streaming",
+          "lag_seconds"
+        ],
+        "title": "Siem"
+      },
+      "SignatureEvidence": {
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "title": "Valid"
+          },
+          "alg": {
+            "type": "string",
+            "title": "Alg"
+          },
+          "kid": {
+            "type": "string",
+            "title": "Kid"
+          },
+          "key_registered_at": {
+            "type": "string",
+            "title": "Key Registered At"
+          },
+          "custody_note": {
+            "type": "string",
+            "title": "Custody Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valid",
+          "alg",
+          "kid",
+          "key_registered_at",
+          "custody_note"
+        ],
+        "title": "SignatureEvidence"
+      },
+      "SigningKeyOut": {
+        "properties": {
+          "kid": {
+            "type": "string",
+            "title": "Kid"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kid",
+          "status"
+        ],
+        "title": "SigningKeyOut"
+      },
+      "StaffMessageIn": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Body"
+          },
+          "require_resubmission": {
+            "type": "boolean",
+            "title": "Require Resubmission",
+            "default": false
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "StaffMessageIn"
+      },
+      "Stages": {
+        "properties": {
+          "stage": {
+            "type": "string",
+            "enum": [
+              "enrolled",
+              "live",
+              "suspended"
+            ],
+            "title": "Stage"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stage",
+          "count"
+        ],
+        "title": "Stages"
+      },
+      "SubmissionDetail": {
+        "properties": {
+          "row": {
+            "$ref": "#/components/schemas/SubmissionRow"
+          },
+          "return_version": {
+            "type": "string",
+            "title": "Return Version"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "solo",
+              "consolidated"
+            ],
+            "title": "Basis"
+          },
+          "amendment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Amendment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "content": {
+            "$ref": "#/components/schemas/Content"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "declaration": {
+            "$ref": "#/components/schemas/DeclarationOut"
+          },
+          "institution": {
+            "$ref": "#/components/schemas/InstitutionPanel"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/VersionRow"
+            },
+            "type": "array",
+            "title": "Versions"
+          },
+          "activity": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityItem"
+            },
+            "type": "array",
+            "title": "Activity"
+          },
+          "allowed_actions": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "accept",
+                "query",
+                "request_resubmission",
+                "assign"
+              ]
+            },
+            "type": "array",
+            "title": "Allowed Actions"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/FiledDocument"
+            },
+            "type": "array",
+            "title": "Documents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row",
+          "return_version",
+          "basis",
+          "amendment",
+          "validation",
+          "content",
+          "evidence",
+          "declaration",
+          "institution",
+          "versions",
+          "activity",
+          "allowed_actions"
+        ],
+        "title": "SubmissionDetail"
+      },
+      "SubmissionRow": {
+        "properties": {
+          "receipt_id": {
+            "type": "string",
+            "title": "Receipt Id"
+          },
+          "received_at": {
+            "type": "string",
+            "title": "Received At"
+          },
+          "institution_code": {
+            "type": "string",
+            "title": "Institution Code"
+          },
+          "institution_name": {
+            "type": "string",
+            "title": "Institution Name"
+          },
+          "return_code": {
+            "type": "string",
+            "title": "Return Code"
+          },
+          "return_name": {
+            "type": "string",
+            "title": "Return Name"
+          },
+          "reporting_date": {
+            "type": "string",
+            "title": "Reporting Date"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "api",
+              "portal_upload"
+            ],
+            "title": "Channel"
+          },
+          "software_declared": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Declared"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowValidation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "received",
+              "validating",
+              "rejected",
+              "in_review",
+              "accepted",
+              "queried",
+              "superseded"
+            ],
+            "title": "Status"
+          },
+          "reviewer_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewer Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "receipt_id",
+          "received_at",
+          "institution_code",
+          "institution_name",
+          "return_code",
+          "return_name",
+          "reporting_date",
+          "version",
+          "channel",
+          "software_declared",
+          "validation",
+          "status",
+          "reviewer_name"
+        ],
+        "title": "SubmissionRow"
+      },
+      "SumRule": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "kind": {
+            "type": "string",
+            "const": "sum",
+            "title": "Kind"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "terms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Terms"
+          },
+          "subtract": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Subtract"
+          },
+          "tolerance": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Tolerance",
+            "default": 0
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "kind",
+          "target",
+          "description"
+        ],
+        "title": "SumRule",
+        "description": "``target`` equals the sum of ``terms`` less the sum of ``subtract``."
+      },
+      "Totals": {
+        "properties": {
+          "due": {
+            "type": "integer",
+            "title": "Due"
+          },
+          "received": {
+            "type": "integer",
+            "title": "Received"
+          },
+          "accepted": {
+            "type": "integer",
+            "title": "Accepted"
+          },
+          "outstanding_past_due": {
+            "type": "integer",
+            "title": "Outstanding Past Due"
+          },
+          "filed_late": {
+            "type": "integer",
+            "title": "Filed Late"
+          },
+          "open_queries": {
+            "type": "integer",
+            "title": "Open Queries"
+          },
+          "institutions": {
+            "type": "integer",
+            "title": "Institutions"
+          },
+          "returns": {
+            "type": "integer",
+            "title": "Returns"
+          }
+        },
+        "type": "object",
+        "required": [
+          "due",
+          "received",
+          "accepted",
+          "outstanding_past_due",
+          "filed_late",
+          "open_queries",
+          "institutions",
+          "returns"
+        ],
+        "title": "Totals"
+      },
+      "Upcoming": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "count_label": {
+            "type": "string",
+            "title": "Count Label"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "count_label",
+          "detail"
+        ],
+        "title": "Upcoming"
+      },
+      "ValidationDetail": {
+        "properties": {
+          "rule_set": {
+            "type": "string",
+            "title": "Rule Set"
+          },
+          "ran_at": {
+            "type": "string",
+            "title": "Ran At"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "title": "Duration Ms"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationGroup"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rule_set",
+          "ran_at",
+          "duration_ms",
+          "groups",
+          "issues"
+        ],
+        "title": "ValidationDetail"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "ValidationGroup": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "passed": {
+            "type": "integer",
+            "title": "Passed"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "passed",
+          "total",
+          "note"
+        ],
+        "title": "ValidationGroup"
+      },
+      "VarianceRule": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "severity": {
+            "type": "string",
+            "const": "warning",
+            "title": "Severity"
+          },
+          "kind": {
+            "type": "string",
+            "const": "variance",
+            "title": "Kind"
+          },
+          "line": {
+            "type": "string",
+            "title": "Line"
+          },
+          "max_change_pct": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Max Change Pct",
+            "gt": 0
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "kind",
+          "line",
+          "max_change_pct",
+          "description"
+        ],
+        "title": "VarianceRule"
+      },
+      "VerifyOut": {
+        "properties": {
+          "intact": {
+            "type": "boolean",
+            "title": "Intact"
+          },
+          "entries": {
+            "type": "integer",
+            "title": "Entries"
+          },
+          "verified_at": {
+            "type": "string",
+            "title": "Verified At"
+          },
+          "first_bad_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Bad Seq"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intact",
+          "entries",
+          "verified_at",
+          "first_bad_seq"
+        ],
+        "title": "VerifyOut"
+      },
+      "VersionRow": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "receipt_id": {
+            "type": "string",
+            "title": "Receipt Id"
+          },
+          "received_at": {
+            "type": "string",
+            "title": "Received At"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "received",
+              "validating",
+              "rejected",
+              "in_review",
+              "accepted",
+              "queried",
+              "superseded"
+            ],
+            "title": "Status"
+          },
+          "current": {
+            "type": "boolean",
+            "title": "Current"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "receipt_id",
+          "received_at",
+          "status",
+          "current"
+        ],
+        "title": "VersionRow"
+      },
+      "app__portal__submissions__SubmissionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionRow"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next_cursor",
+          "counts"
+        ],
+        "title": "SubmissionList"
+      }
+    },
+    "securitySchemes": {
+      "StaffIdToken": {
+        "type": "http",
+        "description": "The BoG identity provider's ID token",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

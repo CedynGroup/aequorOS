@@ -1,0 +1,4598 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD3A",
+ "name": "Large Exposures — Advances and Deposits",
+ "cadence": "monthly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd3a-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD3A REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_bsd3_sheet_1",
+   "title": "BSD3-Sheet-1",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD3A.S1.R6.name",
+     "label": "1. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R6.account_type",
+     "label": "1. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R6.maturity",
+     "label": "1. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R6.foreign",
+     "label": "1. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R6.cedi",
+     "label": "1. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G6",
+     "label": "1.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R6.remarks",
+     "label": "1.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R7.name",
+     "label": "2. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R7.account_type",
+     "label": "2. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R7.maturity",
+     "label": "2. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R7.foreign",
+     "label": "2. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R7.cedi",
+     "label": "2. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G7",
+     "label": "2.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R7.remarks",
+     "label": "2.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R8.name",
+     "label": "3. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R8.account_type",
+     "label": "3. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R8.maturity",
+     "label": "3. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R8.foreign",
+     "label": "3. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R8.cedi",
+     "label": "3. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G8",
+     "label": "3.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R8.remarks",
+     "label": "3.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R9.name",
+     "label": "4. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R9.account_type",
+     "label": "4. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R9.maturity",
+     "label": "4. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R9.foreign",
+     "label": "4. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R9.cedi",
+     "label": "4. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G9",
+     "label": "4.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R9.remarks",
+     "label": "4.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R10.name",
+     "label": "5. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R10.account_type",
+     "label": "5. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R10.maturity",
+     "label": "5. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R10.foreign",
+     "label": "5. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R10.cedi",
+     "label": "5. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G10",
+     "label": "5.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R10.remarks",
+     "label": "5.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R11.name",
+     "label": "6. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R11.account_type",
+     "label": "6. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R11.maturity",
+     "label": "6. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R11.foreign",
+     "label": "6. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R11.cedi",
+     "label": "6. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G11",
+     "label": "6.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R11.remarks",
+     "label": "6.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R12.name",
+     "label": "7. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R12.account_type",
+     "label": "7. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R12.maturity",
+     "label": "7. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R12.foreign",
+     "label": "7. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R12.cedi",
+     "label": "7. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G12",
+     "label": "7.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R12.remarks",
+     "label": "7.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R13.name",
+     "label": "8. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R13.account_type",
+     "label": "8. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R13.maturity",
+     "label": "8. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R13.foreign",
+     "label": "8. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R13.cedi",
+     "label": "8. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G13",
+     "label": "8.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R13.remarks",
+     "label": "8.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R14.name",
+     "label": "9. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R14.account_type",
+     "label": "9. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R14.maturity",
+     "label": "9. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R14.foreign",
+     "label": "9. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R14.cedi",
+     "label": "9. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G14",
+     "label": "9.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R14.remarks",
+     "label": "9.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R15.name",
+     "label": "10. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R15.account_type",
+     "label": "10. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R15.maturity",
+     "label": "10. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R15.foreign",
+     "label": "10. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R15.cedi",
+     "label": "10. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G15",
+     "label": "10.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R15.remarks",
+     "label": "10.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R16.name",
+     "label": "11. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R16.account_type",
+     "label": "11. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R16.maturity",
+     "label": "11. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R16.foreign",
+     "label": "11. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R16.cedi",
+     "label": "11. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G16",
+     "label": "11.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R16.remarks",
+     "label": "11.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R17.name",
+     "label": "12. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R17.account_type",
+     "label": "12. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R17.maturity",
+     "label": "12. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R17.foreign",
+     "label": "12. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R17.cedi",
+     "label": "12. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G17",
+     "label": "12.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R17.remarks",
+     "label": "12.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R18.name",
+     "label": "13. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R18.account_type",
+     "label": "13. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R18.maturity",
+     "label": "13. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R18.foreign",
+     "label": "13. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R18.cedi",
+     "label": "13. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G18",
+     "label": "13.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R18.remarks",
+     "label": "13.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R19.name",
+     "label": "14. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R19.account_type",
+     "label": "14. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R19.maturity",
+     "label": "14. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R19.foreign",
+     "label": "14. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R19.cedi",
+     "label": "14. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G19",
+     "label": "14.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R19.remarks",
+     "label": "14.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R20.name",
+     "label": "15. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R20.account_type",
+     "label": "15. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R20.maturity",
+     "label": "15. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R20.foreign",
+     "label": "15. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R20.cedi",
+     "label": "15. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G20",
+     "label": "15.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R20.remarks",
+     "label": "15.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R21.name",
+     "label": "16. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R21.account_type",
+     "label": "16. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R21.maturity",
+     "label": "16. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R21.foreign",
+     "label": "16. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R21.cedi",
+     "label": "16. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G21",
+     "label": "16.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R21.remarks",
+     "label": "16.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R22.name",
+     "label": "17. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R22.account_type",
+     "label": "17. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R22.maturity",
+     "label": "17. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R22.foreign",
+     "label": "17. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R22.cedi",
+     "label": "17. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G22",
+     "label": "17.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R22.remarks",
+     "label": "17.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R23.name",
+     "label": "18. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R23.account_type",
+     "label": "18. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R23.maturity",
+     "label": "18. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R23.foreign",
+     "label": "18. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R23.cedi",
+     "label": "18. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G23",
+     "label": "18.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R23.remarks",
+     "label": "18.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R24.name",
+     "label": "19. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R24.account_type",
+     "label": "19. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R24.maturity",
+     "label": "19. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R24.foreign",
+     "label": "19. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R24.cedi",
+     "label": "19. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G24",
+     "label": "19.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R24.remarks",
+     "label": "19.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R25.name",
+     "label": "20. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R25.account_type",
+     "label": "20. — account type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R25.maturity",
+     "label": "20. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S1.R25.foreign",
+     "label": "20. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R25.cedi",
+     "label": "20. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G25",
+     "label": "20.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.remarks.R25.remarks",
+     "label": "20.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3-Sheet-1!G26",
+     "label": "21.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.number.R27.number",
+     "label": "Accrued Interest",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD3A.S1.R27.foreign",
+     "label": "Accrued Interest — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S1.R27.cedi",
+     "label": "Accrued Interest — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-1!G27",
+     "label": "Accrued Interest",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.number.R28.number",
+     "label": "Total Deposits(Including accrued Interest)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD3-Sheet-1!G28",
+     "label": "Total Deposits(Including accrued Interest)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S1.number.R29.number",
+     "label": "21 as a percentage of 22",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD3A.S1.number.R30.number",
+     "label": "Total no. of depositors.",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD3A.S1.R30.count",
+     "label": "Total no. of depositors.",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "sheet_bsd3_sheet_2",
+   "title": "BSD3-Sheet-2",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD3A.S2.R6.name",
+     "label": "1. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R6.maturity",
+     "label": "1. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R6.foreign",
+     "label": "1. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S2.R6.cedi",
+     "label": "1. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-2!F6",
+     "label": "1.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S2.R6.on_balance",
+     "label": "1. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.security.R6.security_value",
+     "label": "1.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.remarks.R6.remarks",
+     "label": "1.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R7.name",
+     "label": "2. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R7.maturity",
+     "label": "2. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R7.foreign",
+     "label": "2. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S2.R7.cedi",
+     "label": "2. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-2!F7",
+     "label": "2.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S2.R7.on_balance",
+     "label": "2. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.security.R7.security_value",
+     "label": "2.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.remarks.R7.remarks",
+     "label": "2.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R8.name",
+     "label": "3. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R8.maturity",
+     "label": "3. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R8.foreign",
+     "label": "3. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S2.R8.cedi",
+     "label": "3. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-2!F8",
+     "label": "3.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S2.R8.on_balance",
+     "label": "3. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.security.R8.security_value",
+     "label": "3.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.remarks.R8.remarks",
+     "label": "3.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R9.name",
+     "label": "4. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R9.maturity",
+     "label": "4. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R9.foreign",
+     "label": "4. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S2.R9.cedi",
+     "label": "4. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-2!F9",
+     "label": "4.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S2.R9.on_balance",
+     "label": "4. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.security.R9.security_value",
+     "label": "4.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.remarks.R9.remarks",
+     "label": "4.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R10.name",
+     "label": "5. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R10.maturity",
+     "label": "5. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R10.foreign",
+     "label": "5. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S2.R10.cedi",
+     "label": "5. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-2!F10",
+     "label": "5.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S2.R10.on_balance",
+     "label": "5. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.security.R10.security_value",
+     "label": "5.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.remarks.R10.remarks",
+     "label": "5.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R11.name",
+     "label": "6. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R11.maturity",
+     "label": "6. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R11.foreign",
+     "label": "6. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S2.R11.cedi",
+     "label": "6. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-2!F11",
+     "label": "6.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S2.R11.on_balance",
+     "label": "6. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.security.R11.security_value",
+     "label": "6.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.remarks.R11.remarks",
+     "label": "6.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R12.name",
+     "label": "7. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R12.maturity",
+     "label": "7. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R12.foreign",
+     "label": "7. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S2.R12.cedi",
+     "label": "7. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-2!F12",
+     "label": "7.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S2.R12.on_balance",
+     "label": "7. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.security.R12.security_value",
+     "label": "7.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.remarks.R12.remarks",
+     "label": "7.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R13.name",
+     "label": "8. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R13.maturity",
+     "label": "8. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R13.foreign",
+     "label": "8. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S2.R13.cedi",
+     "label": "8. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-2!F13",
+     "label": "8.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S2.R13.on_balance",
+     "label": "8. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.security.R13.security_value",
+     "label": "8.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.remarks.R13.remarks",
+     "label": "8.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R14.name",
+     "label": "9. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R14.maturity",
+     "label": "9. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R14.foreign",
+     "label": "9. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S2.R14.cedi",
+     "label": "9. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-2!F14",
+     "label": "9.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S2.R14.on_balance",
+     "label": "9. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.security.R14.security_value",
+     "label": "9.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.remarks.R14.remarks",
+     "label": "9.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R15.name",
+     "label": "10. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R15.maturity",
+     "label": "10. — maturity",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.R15.foreign",
+     "label": "10. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S2.R15.cedi",
+     "label": "10. — cedi",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-2!F15",
+     "label": "10.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S2.R15.on_balance",
+     "label": "10. — on balance",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.security.R15.security_value",
+     "label": "10.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S2.remarks.R15.remarks",
+     "label": "10.",
+     "kind": "value"
+    }
+   ]
+  },
+  {
+   "code": "sheet_bsd3_sheet_3",
+   "title": "BSD3-Sheet-3",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD3A.S3.R5.name",
+     "label": "1. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R5.exposure_type",
+     "label": "1. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R5.drawn",
+     "label": "1. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R5.undrawn",
+     "label": "1. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R5.contingent",
+     "label": "1. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G5",
+     "label": "1.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R5.security_value",
+     "label": "1. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R5.security_type",
+     "label": "1. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R5.remarks",
+     "label": "1.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R6.name",
+     "label": "2. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R6.exposure_type",
+     "label": "2. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R6.drawn",
+     "label": "2. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R6.undrawn",
+     "label": "2. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R6.contingent",
+     "label": "2. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G6",
+     "label": "2.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R6.security_value",
+     "label": "2. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R6.security_type",
+     "label": "2. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R6.remarks",
+     "label": "2.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R7.name",
+     "label": "3. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R7.exposure_type",
+     "label": "3. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R7.drawn",
+     "label": "3. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R7.undrawn",
+     "label": "3. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R7.contingent",
+     "label": "3. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G7",
+     "label": "3.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R7.security_value",
+     "label": "3. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R7.security_type",
+     "label": "3. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R7.remarks",
+     "label": "3.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R8.name",
+     "label": "4. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R8.exposure_type",
+     "label": "4. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R8.drawn",
+     "label": "4. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R8.undrawn",
+     "label": "4. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R8.contingent",
+     "label": "4. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G8",
+     "label": "4.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R8.security_value",
+     "label": "4. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R8.security_type",
+     "label": "4. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R8.remarks",
+     "label": "4.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R9.name",
+     "label": "5. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R9.exposure_type",
+     "label": "5. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R9.drawn",
+     "label": "5. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R9.undrawn",
+     "label": "5. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R9.contingent",
+     "label": "5. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G9",
+     "label": "5.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R9.security_value",
+     "label": "5. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R9.security_type",
+     "label": "5. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R9.remarks",
+     "label": "5.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R10.name",
+     "label": "6. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R10.exposure_type",
+     "label": "6. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R10.drawn",
+     "label": "6. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R10.undrawn",
+     "label": "6. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R10.contingent",
+     "label": "6. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G10",
+     "label": "6.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R10.security_value",
+     "label": "6. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R10.security_type",
+     "label": "6. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R10.remarks",
+     "label": "6.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R11.name",
+     "label": "7. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R11.exposure_type",
+     "label": "7. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R11.drawn",
+     "label": "7. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R11.undrawn",
+     "label": "7. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R11.contingent",
+     "label": "7. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G11",
+     "label": "7.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R11.security_value",
+     "label": "7. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R11.security_type",
+     "label": "7. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R11.remarks",
+     "label": "7.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R12.name",
+     "label": "8. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R12.exposure_type",
+     "label": "8. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R12.drawn",
+     "label": "8. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R12.undrawn",
+     "label": "8. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R12.contingent",
+     "label": "8. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G12",
+     "label": "8.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R12.security_value",
+     "label": "8. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R12.security_type",
+     "label": "8. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R12.remarks",
+     "label": "8.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R13.name",
+     "label": "9. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R13.exposure_type",
+     "label": "9. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R13.drawn",
+     "label": "9. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R13.undrawn",
+     "label": "9. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R13.contingent",
+     "label": "9. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G13",
+     "label": "9.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R13.security_value",
+     "label": "9. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R13.security_type",
+     "label": "9. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R13.remarks",
+     "label": "9.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R14.name",
+     "label": "10. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R14.exposure_type",
+     "label": "10. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R14.drawn",
+     "label": "10. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R14.undrawn",
+     "label": "10. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R14.contingent",
+     "label": "10. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G14",
+     "label": "10.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R14.security_value",
+     "label": "10. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R14.security_type",
+     "label": "10. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R14.remarks",
+     "label": "10.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R15.name",
+     "label": "11. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R15.exposure_type",
+     "label": "11. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R15.drawn",
+     "label": "11. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R15.undrawn",
+     "label": "11. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R15.contingent",
+     "label": "11. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G15",
+     "label": "11.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R15.security_value",
+     "label": "11. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R15.security_type",
+     "label": "11. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R15.remarks",
+     "label": "11.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R16.name",
+     "label": "12. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R16.exposure_type",
+     "label": "12. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R16.drawn",
+     "label": "12. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R16.undrawn",
+     "label": "12. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R16.contingent",
+     "label": "12. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G16",
+     "label": "12.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R16.security_value",
+     "label": "12. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R16.security_type",
+     "label": "12. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R16.remarks",
+     "label": "12.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R17.name",
+     "label": "13. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R17.exposure_type",
+     "label": "13. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R17.drawn",
+     "label": "13. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R17.undrawn",
+     "label": "13. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R17.contingent",
+     "label": "13. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G17",
+     "label": "13.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R17.security_value",
+     "label": "13. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R17.security_type",
+     "label": "13. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R17.remarks",
+     "label": "13.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R18.name",
+     "label": "14. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R18.exposure_type",
+     "label": "14. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R18.drawn",
+     "label": "14. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R18.undrawn",
+     "label": "14. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R18.contingent",
+     "label": "14. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G18",
+     "label": "14.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R18.security_value",
+     "label": "14. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R18.security_type",
+     "label": "14. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R18.remarks",
+     "label": "14.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R19.name",
+     "label": "15. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R19.exposure_type",
+     "label": "15. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R19.drawn",
+     "label": "15. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R19.undrawn",
+     "label": "15. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R19.contingent",
+     "label": "15. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G19",
+     "label": "15.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R19.security_value",
+     "label": "15. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R19.security_type",
+     "label": "15. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R19.remarks",
+     "label": "15.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R20.name",
+     "label": "16. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R20.exposure_type",
+     "label": "16. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R20.drawn",
+     "label": "16. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R20.undrawn",
+     "label": "16. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R20.contingent",
+     "label": "16. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G20",
+     "label": "16.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R20.security_value",
+     "label": "16. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R20.security_type",
+     "label": "16. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R20.remarks",
+     "label": "16.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R21.name",
+     "label": "17. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R21.exposure_type",
+     "label": "17. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R21.drawn",
+     "label": "17. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R21.undrawn",
+     "label": "17. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R21.contingent",
+     "label": "17. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G21",
+     "label": "17.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R21.security_value",
+     "label": "17. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R21.security_type",
+     "label": "17. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R21.remarks",
+     "label": "17.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R22.name",
+     "label": "18. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R22.exposure_type",
+     "label": "18. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R22.drawn",
+     "label": "18. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R22.undrawn",
+     "label": "18. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R22.contingent",
+     "label": "18. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G22",
+     "label": "18.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R22.security_value",
+     "label": "18. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R22.security_type",
+     "label": "18. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R22.remarks",
+     "label": "18.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R23.name",
+     "label": "19. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R23.exposure_type",
+     "label": "19. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R23.drawn",
+     "label": "19. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R23.undrawn",
+     "label": "19. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R23.contingent",
+     "label": "19. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G23",
+     "label": "19.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R23.security_value",
+     "label": "19. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R23.security_type",
+     "label": "19. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R23.remarks",
+     "label": "19.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R24.name",
+     "label": "20. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R24.exposure_type",
+     "label": "20. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R24.drawn",
+     "label": "20. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R24.undrawn",
+     "label": "20. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R24.contingent",
+     "label": "20. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G24",
+     "label": "20.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R24.security_value",
+     "label": "20. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R24.security_type",
+     "label": "20. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R24.remarks",
+     "label": "20.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R25.name",
+     "label": "21. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R25.exposure_type",
+     "label": "21. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R25.drawn",
+     "label": "21. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R25.undrawn",
+     "label": "21. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R25.contingent",
+     "label": "21. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G25",
+     "label": "21.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R25.security_value",
+     "label": "21. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R25.security_type",
+     "label": "21. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R25.remarks",
+     "label": "21.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R26.name",
+     "label": "22. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R26.exposure_type",
+     "label": "22. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R26.drawn",
+     "label": "22. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R26.undrawn",
+     "label": "22. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R26.contingent",
+     "label": "22. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G26",
+     "label": "22.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R26.security_value",
+     "label": "22. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R26.security_type",
+     "label": "22. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R26.remarks",
+     "label": "22.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R27.name",
+     "label": "23. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R27.exposure_type",
+     "label": "23. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R27.drawn",
+     "label": "23. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R27.undrawn",
+     "label": "23. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R27.contingent",
+     "label": "23. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G27",
+     "label": "23.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R27.security_value",
+     "label": "23. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R27.security_type",
+     "label": "23. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R27.remarks",
+     "label": "23.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R28.name",
+     "label": "24. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R28.exposure_type",
+     "label": "24. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R28.drawn",
+     "label": "24. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R28.undrawn",
+     "label": "24. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R28.contingent",
+     "label": "24. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G28",
+     "label": "24.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R28.security_value",
+     "label": "24. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R28.security_type",
+     "label": "24. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R28.remarks",
+     "label": "24.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R29.name",
+     "label": "25. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R29.exposure_type",
+     "label": "25. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R29.drawn",
+     "label": "25. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R29.undrawn",
+     "label": "25. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R29.contingent",
+     "label": "25. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G29",
+     "label": "25.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R29.security_value",
+     "label": "25. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R29.security_type",
+     "label": "25. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R29.remarks",
+     "label": "25.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R30.name",
+     "label": "26. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R30.exposure_type",
+     "label": "26. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R30.drawn",
+     "label": "26. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R30.undrawn",
+     "label": "26. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R30.contingent",
+     "label": "26. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G30",
+     "label": "26.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R30.security_value",
+     "label": "26. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R30.security_type",
+     "label": "26. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R30.remarks",
+     "label": "26.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R31.name",
+     "label": "27. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R31.exposure_type",
+     "label": "27. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R31.drawn",
+     "label": "27. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R31.undrawn",
+     "label": "27. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R31.contingent",
+     "label": "27. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G31",
+     "label": "27.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R31.security_value",
+     "label": "27. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R31.security_type",
+     "label": "27. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R31.remarks",
+     "label": "27.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R32.name",
+     "label": "28. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R32.exposure_type",
+     "label": "28. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R32.drawn",
+     "label": "28. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R32.undrawn",
+     "label": "28. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R32.contingent",
+     "label": "28. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G32",
+     "label": "28.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R32.security_value",
+     "label": "28. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R32.security_type",
+     "label": "28. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R32.remarks",
+     "label": "28.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R33.name",
+     "label": "29. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R33.exposure_type",
+     "label": "29. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R33.drawn",
+     "label": "29. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R33.undrawn",
+     "label": "29. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R33.contingent",
+     "label": "29. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G33",
+     "label": "29.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R33.security_value",
+     "label": "29. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R33.security_type",
+     "label": "29. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R33.remarks",
+     "label": "29.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R34.name",
+     "label": "30. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R34.exposure_type",
+     "label": "30. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R34.drawn",
+     "label": "30. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R34.undrawn",
+     "label": "30. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R34.contingent",
+     "label": "30. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G34",
+     "label": "30.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R34.security_value",
+     "label": "30. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R34.security_type",
+     "label": "30. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R34.remarks",
+     "label": "30.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R35.name",
+     "label": "31. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R35.exposure_type",
+     "label": "31. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R35.drawn",
+     "label": "31. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R35.undrawn",
+     "label": "31. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R35.contingent",
+     "label": "31. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G35",
+     "label": "31.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R35.security_value",
+     "label": "31. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R35.security_type",
+     "label": "31. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R35.remarks",
+     "label": "31.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R36.name",
+     "label": "32. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R36.exposure_type",
+     "label": "32. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R36.drawn",
+     "label": "32. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R36.undrawn",
+     "label": "32. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R36.contingent",
+     "label": "32. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G36",
+     "label": "32.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R36.security_value",
+     "label": "32. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R36.security_type",
+     "label": "32. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R36.remarks",
+     "label": "32.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R37.name",
+     "label": "33. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R37.exposure_type",
+     "label": "33. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R37.drawn",
+     "label": "33. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R37.undrawn",
+     "label": "33. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R37.contingent",
+     "label": "33. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G37",
+     "label": "33.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R37.security_value",
+     "label": "33. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R37.security_type",
+     "label": "33. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R37.remarks",
+     "label": "33.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R38.name",
+     "label": "34. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R38.exposure_type",
+     "label": "34. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R38.drawn",
+     "label": "34. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R38.undrawn",
+     "label": "34. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R38.contingent",
+     "label": "34. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G38",
+     "label": "34.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R38.security_value",
+     "label": "34. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R38.security_type",
+     "label": "34. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R38.remarks",
+     "label": "34.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R39.name",
+     "label": "35. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R39.exposure_type",
+     "label": "35. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R39.drawn",
+     "label": "35. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R39.undrawn",
+     "label": "35. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R39.contingent",
+     "label": "35. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G39",
+     "label": "35.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R39.security_value",
+     "label": "35. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R39.security_type",
+     "label": "35. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R39.remarks",
+     "label": "35.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R40.name",
+     "label": "36. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R40.exposure_type",
+     "label": "36. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R40.drawn",
+     "label": "36. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R40.undrawn",
+     "label": "36. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R40.contingent",
+     "label": "36. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G40",
+     "label": "36.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R40.security_value",
+     "label": "36. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R40.security_type",
+     "label": "36. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R40.remarks",
+     "label": "36.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R41.name",
+     "label": "37. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R41.exposure_type",
+     "label": "37. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R41.drawn",
+     "label": "37. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R41.undrawn",
+     "label": "37. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R41.contingent",
+     "label": "37. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G41",
+     "label": "37.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R41.security_value",
+     "label": "37. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R41.security_type",
+     "label": "37. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R41.remarks",
+     "label": "37.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R42.name",
+     "label": "38. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R42.exposure_type",
+     "label": "38. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R42.drawn",
+     "label": "38. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R42.undrawn",
+     "label": "38. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R42.contingent",
+     "label": "38. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G42",
+     "label": "38.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R42.security_value",
+     "label": "38. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R42.security_type",
+     "label": "38. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R42.remarks",
+     "label": "38.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R43.name",
+     "label": "39. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R43.exposure_type",
+     "label": "39. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R43.drawn",
+     "label": "39. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R43.undrawn",
+     "label": "39. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R43.contingent",
+     "label": "39. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G43",
+     "label": "39.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R43.security_value",
+     "label": "39. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R43.security_type",
+     "label": "39. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R43.remarks",
+     "label": "39.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R44.name",
+     "label": "40. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R44.exposure_type",
+     "label": "40. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R44.drawn",
+     "label": "40. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R44.undrawn",
+     "label": "40. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R44.contingent",
+     "label": "40. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G44",
+     "label": "40.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R44.security_value",
+     "label": "40. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R44.security_type",
+     "label": "40. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R44.remarks",
+     "label": "40.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R45.name",
+     "label": "41. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R45.exposure_type",
+     "label": "41. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R45.drawn",
+     "label": "41. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R45.undrawn",
+     "label": "41. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R45.contingent",
+     "label": "41. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G45",
+     "label": "41.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R45.security_value",
+     "label": "41. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R45.security_type",
+     "label": "41. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R45.remarks",
+     "label": "41.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R46.name",
+     "label": "42. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R46.exposure_type",
+     "label": "42. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R46.drawn",
+     "label": "42. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R46.undrawn",
+     "label": "42. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R46.contingent",
+     "label": "42. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G46",
+     "label": "42.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R46.security_value",
+     "label": "42. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R46.security_type",
+     "label": "42. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R46.remarks",
+     "label": "42.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R47.name",
+     "label": "43. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R47.exposure_type",
+     "label": "43. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R47.drawn",
+     "label": "43. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R47.undrawn",
+     "label": "43. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R47.contingent",
+     "label": "43. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G47",
+     "label": "43.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R47.security_value",
+     "label": "43. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R47.security_type",
+     "label": "43. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R47.remarks",
+     "label": "43.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R48.name",
+     "label": "44. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R48.exposure_type",
+     "label": "44. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R48.drawn",
+     "label": "44. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R48.undrawn",
+     "label": "44. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R48.contingent",
+     "label": "44. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G48",
+     "label": "44.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R48.security_value",
+     "label": "44. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R48.security_type",
+     "label": "44. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R48.remarks",
+     "label": "44.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R49.name",
+     "label": "45. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R49.exposure_type",
+     "label": "45. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R49.drawn",
+     "label": "45. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R49.undrawn",
+     "label": "45. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R49.contingent",
+     "label": "45. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G49",
+     "label": "45.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R49.security_value",
+     "label": "45. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R49.security_type",
+     "label": "45. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R49.remarks",
+     "label": "45.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R50.name",
+     "label": "46. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R50.exposure_type",
+     "label": "46. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R50.drawn",
+     "label": "46. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R50.undrawn",
+     "label": "46. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R50.contingent",
+     "label": "46. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G50",
+     "label": "46.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R50.security_value",
+     "label": "46. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R50.security_type",
+     "label": "46. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R50.remarks",
+     "label": "46.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R51.name",
+     "label": "47. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R51.exposure_type",
+     "label": "47. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R51.drawn",
+     "label": "47. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R51.undrawn",
+     "label": "47. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R51.contingent",
+     "label": "47. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G51",
+     "label": "47.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R51.security_value",
+     "label": "47. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R51.security_type",
+     "label": "47. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R51.remarks",
+     "label": "47.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R52.name",
+     "label": "48. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R52.exposure_type",
+     "label": "48. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R52.drawn",
+     "label": "48. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R52.undrawn",
+     "label": "48. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R52.contingent",
+     "label": "48. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G52",
+     "label": "48.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R52.security_value",
+     "label": "48. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R52.security_type",
+     "label": "48. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R52.remarks",
+     "label": "48.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R53.name",
+     "label": "49. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R53.exposure_type",
+     "label": "49. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R53.drawn",
+     "label": "49. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R53.undrawn",
+     "label": "49. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R53.contingent",
+     "label": "49. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G53",
+     "label": "49.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R53.security_value",
+     "label": "49. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R53.security_type",
+     "label": "49. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R53.remarks",
+     "label": "49.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R54.name",
+     "label": "50. — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R54.exposure_type",
+     "label": "50. — exposure type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.R54.drawn",
+     "label": "50. — drawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R54.undrawn",
+     "label": "50. — undrawn",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3A.S3.R54.contingent",
+     "label": "50. — contingent",
+     "kind": "number"
+    },
+    {
+     "code": "BSD3-Sheet-3!G54",
+     "label": "50.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD3A.S3.security.R54.security_value",
+     "label": "50. — security value",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.security.R54.security_type",
+     "label": "50. — security type",
+     "kind": "value"
+    },
+    {
+     "code": "BSD3A.S3.remarks.R54.remarks",
+     "label": "50.",
+     "kind": "value"
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "BSD3A-ARI-0001",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G6",
+   "terms": [
+    "BSD3A.S1.R6.foreign",
+    "BSD3A.S1.R6.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G6 follows the template formula =E6+F6"
+  },
+  {
+   "id": "BSD3A-ARI-0002",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G7",
+   "terms": [
+    "BSD3A.S1.R7.foreign",
+    "BSD3A.S1.R7.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G7 follows the template formula =E7+F7"
+  },
+  {
+   "id": "BSD3A-ARI-0003",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G8",
+   "terms": [
+    "BSD3A.S1.R8.foreign",
+    "BSD3A.S1.R8.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G8 follows the template formula =E8+F8"
+  },
+  {
+   "id": "BSD3A-ARI-0004",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G9",
+   "terms": [
+    "BSD3A.S1.R9.foreign",
+    "BSD3A.S1.R9.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G9 follows the template formula =E9+F9"
+  },
+  {
+   "id": "BSD3A-ARI-0005",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G10",
+   "terms": [
+    "BSD3A.S1.R10.foreign",
+    "BSD3A.S1.R10.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G10 follows the template formula =E10+F10"
+  },
+  {
+   "id": "BSD3A-ARI-0006",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G11",
+   "terms": [
+    "BSD3A.S1.R11.foreign",
+    "BSD3A.S1.R11.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G11 follows the template formula =E11+F11"
+  },
+  {
+   "id": "BSD3A-ARI-0007",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G12",
+   "terms": [
+    "BSD3A.S1.R12.foreign",
+    "BSD3A.S1.R12.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G12 follows the template formula =E12+F12"
+  },
+  {
+   "id": "BSD3A-ARI-0008",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G13",
+   "terms": [
+    "BSD3A.S1.R13.foreign",
+    "BSD3A.S1.R13.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G13 follows the template formula =E13+F13"
+  },
+  {
+   "id": "BSD3A-ARI-0009",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G14",
+   "terms": [
+    "BSD3A.S1.R14.foreign",
+    "BSD3A.S1.R14.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G14 follows the template formula =E14+F14"
+  },
+  {
+   "id": "BSD3A-ARI-0010",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G15",
+   "terms": [
+    "BSD3A.S1.R15.foreign",
+    "BSD3A.S1.R15.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G15 follows the template formula =E15+F15"
+  },
+  {
+   "id": "BSD3A-ARI-0011",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G16",
+   "terms": [
+    "BSD3A.S1.R16.foreign",
+    "BSD3A.S1.R16.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G16 follows the template formula =E16+F16"
+  },
+  {
+   "id": "BSD3A-ARI-0012",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G17",
+   "terms": [
+    "BSD3A.S1.R17.foreign",
+    "BSD3A.S1.R17.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G17 follows the template formula =E17+F17"
+  },
+  {
+   "id": "BSD3A-ARI-0013",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G18",
+   "terms": [
+    "BSD3A.S1.R18.foreign",
+    "BSD3A.S1.R18.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G18 follows the template formula =E18+F18"
+  },
+  {
+   "id": "BSD3A-ARI-0014",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G19",
+   "terms": [
+    "BSD3A.S1.R19.foreign",
+    "BSD3A.S1.R19.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G19 follows the template formula =E19+F19"
+  },
+  {
+   "id": "BSD3A-ARI-0015",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G20",
+   "terms": [
+    "BSD3A.S1.R20.foreign",
+    "BSD3A.S1.R20.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G20 follows the template formula =E20+F20"
+  },
+  {
+   "id": "BSD3A-ARI-0016",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G21",
+   "terms": [
+    "BSD3A.S1.R21.foreign",
+    "BSD3A.S1.R21.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G21 follows the template formula =E21+F21"
+  },
+  {
+   "id": "BSD3A-ARI-0017",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G22",
+   "terms": [
+    "BSD3A.S1.R22.foreign",
+    "BSD3A.S1.R22.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G22 follows the template formula =E22+F22"
+  },
+  {
+   "id": "BSD3A-ARI-0018",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G23",
+   "terms": [
+    "BSD3A.S1.R23.foreign",
+    "BSD3A.S1.R23.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G23 follows the template formula =E23+F23"
+  },
+  {
+   "id": "BSD3A-ARI-0019",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G24",
+   "terms": [
+    "BSD3A.S1.R24.foreign",
+    "BSD3A.S1.R24.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G24 follows the template formula =E24+F24"
+  },
+  {
+   "id": "BSD3A-ARI-0020",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G25",
+   "terms": [
+    "BSD3A.S1.R25.foreign",
+    "BSD3A.S1.R25.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G25 follows the template formula =E25+F25"
+  },
+  {
+   "id": "BSD3A-ARI-0021",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G26",
+   "terms": [
+    "BSD3-Sheet-1!G6",
+    "BSD3-Sheet-1!G7",
+    "BSD3-Sheet-1!G8",
+    "BSD3-Sheet-1!G9",
+    "BSD3-Sheet-1!G10",
+    "BSD3-Sheet-1!G11",
+    "BSD3-Sheet-1!G12",
+    "BSD3-Sheet-1!G13",
+    "BSD3-Sheet-1!G14",
+    "BSD3-Sheet-1!G15",
+    "BSD3-Sheet-1!G16",
+    "BSD3-Sheet-1!G17",
+    "BSD3-Sheet-1!G18",
+    "BSD3-Sheet-1!G19",
+    "BSD3-Sheet-1!G20",
+    "BSD3-Sheet-1!G21",
+    "BSD3-Sheet-1!G22",
+    "BSD3-Sheet-1!G23",
+    "BSD3-Sheet-1!G24",
+    "BSD3-Sheet-1!G25"
+   ],
+   "tolerance": "0.105",
+   "description": "BSD3-Sheet-1!G26 follows the template formula =SUM(G6:G25)"
+  },
+  {
+   "id": "BSD3A-ARI-0022",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G27",
+   "terms": [
+    "BSD3A.S1.R27.foreign",
+    "BSD3A.S1.R27.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G27 follows the template formula =E27+F27"
+  },
+  {
+   "id": "BSD3A-ARI-0023",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-1!G28",
+   "terms": [
+    "BSD3-Sheet-1!G26",
+    "BSD3-Sheet-1!G27"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-1!G28 follows the template formula =G26+G27"
+  },
+  {
+   "id": "BSD3A-ARI-0024",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-2!F6",
+   "terms": [
+    "BSD3A.S2.R6.foreign",
+    "BSD3A.S2.R6.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-2!F6 follows the template formula =D6+E6"
+  },
+  {
+   "id": "BSD3A-ARI-0025",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-2!F7",
+   "terms": [
+    "BSD3A.S2.R7.foreign",
+    "BSD3A.S2.R7.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-2!F7 follows the template formula =D7+E7"
+  },
+  {
+   "id": "BSD3A-ARI-0026",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-2!F8",
+   "terms": [
+    "BSD3A.S2.R8.foreign",
+    "BSD3A.S2.R8.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-2!F8 follows the template formula =D8+E8"
+  },
+  {
+   "id": "BSD3A-ARI-0027",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-2!F9",
+   "terms": [
+    "BSD3A.S2.R9.foreign",
+    "BSD3A.S2.R9.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-2!F9 follows the template formula =D9+E9"
+  },
+  {
+   "id": "BSD3A-ARI-0028",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-2!F10",
+   "terms": [
+    "BSD3A.S2.R10.foreign",
+    "BSD3A.S2.R10.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-2!F10 follows the template formula =D10+E10"
+  },
+  {
+   "id": "BSD3A-ARI-0029",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-2!F11",
+   "terms": [
+    "BSD3A.S2.R11.foreign",
+    "BSD3A.S2.R11.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-2!F11 follows the template formula =D11+E11"
+  },
+  {
+   "id": "BSD3A-ARI-0030",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-2!F12",
+   "terms": [
+    "BSD3A.S2.R12.foreign",
+    "BSD3A.S2.R12.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-2!F12 follows the template formula =D12+E12"
+  },
+  {
+   "id": "BSD3A-ARI-0031",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-2!F13",
+   "terms": [
+    "BSD3A.S2.R13.foreign",
+    "BSD3A.S2.R13.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-2!F13 follows the template formula =D13+E13"
+  },
+  {
+   "id": "BSD3A-ARI-0032",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-2!F14",
+   "terms": [
+    "BSD3A.S2.R14.foreign",
+    "BSD3A.S2.R14.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-2!F14 follows the template formula =D14+E14"
+  },
+  {
+   "id": "BSD3A-ARI-0033",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-2!F15",
+   "terms": [
+    "BSD3A.S2.R15.foreign",
+    "BSD3A.S2.R15.cedi"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD3-Sheet-2!F15 follows the template formula =D15+E15"
+  },
+  {
+   "id": "BSD3A-ARI-0034",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G5",
+   "terms": [
+    "BSD3A.S3.R5.drawn",
+    "BSD3A.S3.R5.undrawn",
+    "BSD3A.S3.R5.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G5 follows the template formula =D5+E5+F5"
+  },
+  {
+   "id": "BSD3A-ARI-0035",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G6",
+   "terms": [
+    "BSD3A.S3.R6.drawn",
+    "BSD3A.S3.R6.undrawn",
+    "BSD3A.S3.R6.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G6 follows the template formula =D6+E6+F6"
+  },
+  {
+   "id": "BSD3A-ARI-0036",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G7",
+   "terms": [
+    "BSD3A.S3.R7.drawn",
+    "BSD3A.S3.R7.undrawn",
+    "BSD3A.S3.R7.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G7 follows the template formula =D7+E7+F7"
+  },
+  {
+   "id": "BSD3A-ARI-0037",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G8",
+   "terms": [
+    "BSD3A.S3.R8.drawn",
+    "BSD3A.S3.R8.undrawn",
+    "BSD3A.S3.R8.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G8 follows the template formula =D8+E8+F8"
+  },
+  {
+   "id": "BSD3A-ARI-0038",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G9",
+   "terms": [
+    "BSD3A.S3.R9.drawn",
+    "BSD3A.S3.R9.undrawn",
+    "BSD3A.S3.R9.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G9 follows the template formula =D9+E9+F9"
+  },
+  {
+   "id": "BSD3A-ARI-0039",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G10",
+   "terms": [
+    "BSD3A.S3.R10.drawn",
+    "BSD3A.S3.R10.undrawn",
+    "BSD3A.S3.R10.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G10 follows the template formula =D10+E10+F10"
+  },
+  {
+   "id": "BSD3A-ARI-0040",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G11",
+   "terms": [
+    "BSD3A.S3.R11.drawn",
+    "BSD3A.S3.R11.undrawn",
+    "BSD3A.S3.R11.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G11 follows the template formula =D11+E11+F11"
+  },
+  {
+   "id": "BSD3A-ARI-0041",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G12",
+   "terms": [
+    "BSD3A.S3.R12.drawn",
+    "BSD3A.S3.R12.undrawn",
+    "BSD3A.S3.R12.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G12 follows the template formula =D12+E12+F12"
+  },
+  {
+   "id": "BSD3A-ARI-0042",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G13",
+   "terms": [
+    "BSD3A.S3.R13.drawn",
+    "BSD3A.S3.R13.undrawn",
+    "BSD3A.S3.R13.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G13 follows the template formula =D13+E13+F13"
+  },
+  {
+   "id": "BSD3A-ARI-0043",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G14",
+   "terms": [
+    "BSD3A.S3.R14.drawn",
+    "BSD3A.S3.R14.undrawn",
+    "BSD3A.S3.R14.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G14 follows the template formula =D14+E14+F14"
+  },
+  {
+   "id": "BSD3A-ARI-0044",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G15",
+   "terms": [
+    "BSD3A.S3.R15.drawn",
+    "BSD3A.S3.R15.undrawn",
+    "BSD3A.S3.R15.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G15 follows the template formula =D15+E15+F15"
+  },
+  {
+   "id": "BSD3A-ARI-0045",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G16",
+   "terms": [
+    "BSD3A.S3.R16.drawn",
+    "BSD3A.S3.R16.undrawn",
+    "BSD3A.S3.R16.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G16 follows the template formula =D16+E16+F16"
+  },
+  {
+   "id": "BSD3A-ARI-0046",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G17",
+   "terms": [
+    "BSD3A.S3.R17.drawn",
+    "BSD3A.S3.R17.undrawn",
+    "BSD3A.S3.R17.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G17 follows the template formula =D17+E17+F17"
+  },
+  {
+   "id": "BSD3A-ARI-0047",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G18",
+   "terms": [
+    "BSD3A.S3.R18.drawn",
+    "BSD3A.S3.R18.undrawn",
+    "BSD3A.S3.R18.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G18 follows the template formula =D18+E18+F18"
+  },
+  {
+   "id": "BSD3A-ARI-0048",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G19",
+   "terms": [
+    "BSD3A.S3.R19.drawn",
+    "BSD3A.S3.R19.undrawn",
+    "BSD3A.S3.R19.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G19 follows the template formula =D19+E19+F19"
+  },
+  {
+   "id": "BSD3A-ARI-0049",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G20",
+   "terms": [
+    "BSD3A.S3.R20.drawn",
+    "BSD3A.S3.R20.undrawn",
+    "BSD3A.S3.R20.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G20 follows the template formula =D20+E20+F20"
+  },
+  {
+   "id": "BSD3A-ARI-0050",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G21",
+   "terms": [
+    "BSD3A.S3.R21.drawn",
+    "BSD3A.S3.R21.undrawn",
+    "BSD3A.S3.R21.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G21 follows the template formula =D21+E21+F21"
+  },
+  {
+   "id": "BSD3A-ARI-0051",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G22",
+   "terms": [
+    "BSD3A.S3.R22.drawn",
+    "BSD3A.S3.R22.undrawn",
+    "BSD3A.S3.R22.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G22 follows the template formula =D22+E22+F22"
+  },
+  {
+   "id": "BSD3A-ARI-0052",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G23",
+   "terms": [
+    "BSD3A.S3.R23.drawn",
+    "BSD3A.S3.R23.undrawn",
+    "BSD3A.S3.R23.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G23 follows the template formula =D23+E23+F23"
+  },
+  {
+   "id": "BSD3A-ARI-0053",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G24",
+   "terms": [
+    "BSD3A.S3.R24.drawn",
+    "BSD3A.S3.R24.undrawn",
+    "BSD3A.S3.R24.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G24 follows the template formula =D24+E24+F24"
+  },
+  {
+   "id": "BSD3A-ARI-0054",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G25",
+   "terms": [
+    "BSD3A.S3.R25.drawn",
+    "BSD3A.S3.R25.undrawn",
+    "BSD3A.S3.R25.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G25 follows the template formula =D25+E25+F25"
+  },
+  {
+   "id": "BSD3A-ARI-0055",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G26",
+   "terms": [
+    "BSD3A.S3.R26.drawn",
+    "BSD3A.S3.R26.undrawn",
+    "BSD3A.S3.R26.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G26 follows the template formula =D26+E26+F26"
+  },
+  {
+   "id": "BSD3A-ARI-0056",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G27",
+   "terms": [
+    "BSD3A.S3.R27.drawn",
+    "BSD3A.S3.R27.undrawn",
+    "BSD3A.S3.R27.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G27 follows the template formula =D27+E27+F27"
+  },
+  {
+   "id": "BSD3A-ARI-0057",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G28",
+   "terms": [
+    "BSD3A.S3.R28.drawn",
+    "BSD3A.S3.R28.undrawn",
+    "BSD3A.S3.R28.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G28 follows the template formula =D28+E28+F28"
+  },
+  {
+   "id": "BSD3A-ARI-0058",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G29",
+   "terms": [
+    "BSD3A.S3.R29.drawn",
+    "BSD3A.S3.R29.undrawn",
+    "BSD3A.S3.R29.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G29 follows the template formula =D29+E29+F29"
+  },
+  {
+   "id": "BSD3A-ARI-0059",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G30",
+   "terms": [
+    "BSD3A.S3.R30.drawn",
+    "BSD3A.S3.R30.undrawn",
+    "BSD3A.S3.R30.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G30 follows the template formula =D30+E30+F30"
+  },
+  {
+   "id": "BSD3A-ARI-0060",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G31",
+   "terms": [
+    "BSD3A.S3.R31.drawn",
+    "BSD3A.S3.R31.undrawn",
+    "BSD3A.S3.R31.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G31 follows the template formula =D31+E31+F31"
+  },
+  {
+   "id": "BSD3A-ARI-0061",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G32",
+   "terms": [
+    "BSD3A.S3.R32.drawn",
+    "BSD3A.S3.R32.undrawn",
+    "BSD3A.S3.R32.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G32 follows the template formula =D32+E32+F32"
+  },
+  {
+   "id": "BSD3A-ARI-0062",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G33",
+   "terms": [
+    "BSD3A.S3.R33.drawn",
+    "BSD3A.S3.R33.undrawn",
+    "BSD3A.S3.R33.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G33 follows the template formula =D33+E33+F33"
+  },
+  {
+   "id": "BSD3A-ARI-0063",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G34",
+   "terms": [
+    "BSD3A.S3.R34.drawn",
+    "BSD3A.S3.R34.undrawn",
+    "BSD3A.S3.R34.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G34 follows the template formula =D34+E34+F34"
+  },
+  {
+   "id": "BSD3A-ARI-0064",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G35",
+   "terms": [
+    "BSD3A.S3.R35.drawn",
+    "BSD3A.S3.R35.undrawn",
+    "BSD3A.S3.R35.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G35 follows the template formula =D35+E35+F35"
+  },
+  {
+   "id": "BSD3A-ARI-0065",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G36",
+   "terms": [
+    "BSD3A.S3.R36.drawn",
+    "BSD3A.S3.R36.undrawn",
+    "BSD3A.S3.R36.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G36 follows the template formula =D36+E36+F36"
+  },
+  {
+   "id": "BSD3A-ARI-0066",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G37",
+   "terms": [
+    "BSD3A.S3.R37.drawn",
+    "BSD3A.S3.R37.undrawn",
+    "BSD3A.S3.R37.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G37 follows the template formula =D37+E37+F37"
+  },
+  {
+   "id": "BSD3A-ARI-0067",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G38",
+   "terms": [
+    "BSD3A.S3.R38.drawn",
+    "BSD3A.S3.R38.undrawn",
+    "BSD3A.S3.R38.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G38 follows the template formula =D38+E38+F38"
+  },
+  {
+   "id": "BSD3A-ARI-0068",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G39",
+   "terms": [
+    "BSD3A.S3.R39.drawn",
+    "BSD3A.S3.R39.undrawn",
+    "BSD3A.S3.R39.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G39 follows the template formula =D39+E39+F39"
+  },
+  {
+   "id": "BSD3A-ARI-0069",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G40",
+   "terms": [
+    "BSD3A.S3.R40.drawn",
+    "BSD3A.S3.R40.undrawn",
+    "BSD3A.S3.R40.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G40 follows the template formula =D40+E40+F40"
+  },
+  {
+   "id": "BSD3A-ARI-0070",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G41",
+   "terms": [
+    "BSD3A.S3.R41.drawn",
+    "BSD3A.S3.R41.undrawn",
+    "BSD3A.S3.R41.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G41 follows the template formula =D41+E41+F41"
+  },
+  {
+   "id": "BSD3A-ARI-0071",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G42",
+   "terms": [
+    "BSD3A.S3.R42.drawn",
+    "BSD3A.S3.R42.undrawn",
+    "BSD3A.S3.R42.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G42 follows the template formula =D42+E42+F42"
+  },
+  {
+   "id": "BSD3A-ARI-0072",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G43",
+   "terms": [
+    "BSD3A.S3.R43.drawn",
+    "BSD3A.S3.R43.undrawn",
+    "BSD3A.S3.R43.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G43 follows the template formula =D43+E43+F43"
+  },
+  {
+   "id": "BSD3A-ARI-0073",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G44",
+   "terms": [
+    "BSD3A.S3.R44.drawn",
+    "BSD3A.S3.R44.undrawn",
+    "BSD3A.S3.R44.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G44 follows the template formula =D44+E44+F44"
+  },
+  {
+   "id": "BSD3A-ARI-0074",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G45",
+   "terms": [
+    "BSD3A.S3.R45.drawn",
+    "BSD3A.S3.R45.undrawn",
+    "BSD3A.S3.R45.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G45 follows the template formula =D45+E45+F45"
+  },
+  {
+   "id": "BSD3A-ARI-0075",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G46",
+   "terms": [
+    "BSD3A.S3.R46.drawn",
+    "BSD3A.S3.R46.undrawn",
+    "BSD3A.S3.R46.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G46 follows the template formula =D46+E46+F46"
+  },
+  {
+   "id": "BSD3A-ARI-0076",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G47",
+   "terms": [
+    "BSD3A.S3.R47.drawn",
+    "BSD3A.S3.R47.undrawn",
+    "BSD3A.S3.R47.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G47 follows the template formula =D47+E47+F47"
+  },
+  {
+   "id": "BSD3A-ARI-0077",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G48",
+   "terms": [
+    "BSD3A.S3.R48.drawn",
+    "BSD3A.S3.R48.undrawn",
+    "BSD3A.S3.R48.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G48 follows the template formula =D48+E48+F48"
+  },
+  {
+   "id": "BSD3A-ARI-0078",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G49",
+   "terms": [
+    "BSD3A.S3.R49.drawn",
+    "BSD3A.S3.R49.undrawn",
+    "BSD3A.S3.R49.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G49 follows the template formula =D49+E49+F49"
+  },
+  {
+   "id": "BSD3A-ARI-0079",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G50",
+   "terms": [
+    "BSD3A.S3.R50.drawn",
+    "BSD3A.S3.R50.undrawn",
+    "BSD3A.S3.R50.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G50 follows the template formula =D50+E50+F50"
+  },
+  {
+   "id": "BSD3A-ARI-0080",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G51",
+   "terms": [
+    "BSD3A.S3.R51.drawn",
+    "BSD3A.S3.R51.undrawn",
+    "BSD3A.S3.R51.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G51 follows the template formula =D51+E51+F51"
+  },
+  {
+   "id": "BSD3A-ARI-0081",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G52",
+   "terms": [
+    "BSD3A.S3.R52.drawn",
+    "BSD3A.S3.R52.undrawn",
+    "BSD3A.S3.R52.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G52 follows the template formula =D52+E52+F52"
+  },
+  {
+   "id": "BSD3A-ARI-0082",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G53",
+   "terms": [
+    "BSD3A.S3.R53.drawn",
+    "BSD3A.S3.R53.undrawn",
+    "BSD3A.S3.R53.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G53 follows the template formula =D53+E53+F53"
+  },
+  {
+   "id": "BSD3A-ARI-0083",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD3-Sheet-3!G54",
+   "terms": [
+    "BSD3A.S3.R54.drawn",
+    "BSD3A.S3.R54.undrawn",
+    "BSD3A.S3.R54.contingent"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD3-Sheet-3!G54 follows the template formula =D54+E54+F54"
+  }
+ ]
+}

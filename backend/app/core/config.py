@@ -111,6 +111,55 @@ class SmtpSettings(BaseSettings):
         return self.smtp_host is not None and self.smtp_from is not None
 
 
+class NotificationSettings(BaseSettings):
+    """The notification platform's deployment knobs (backend/docs/notifications.md).
+
+    Relay credentials stay in :class:`SmtpSettings`; this block decides what the
+    platform does with a configured relay. Everything an institution may change
+    for itself (digest hour, time zone, reminder windows, which alerts reach
+    email) is tenant data in ``notification_settings`` / ``notification_policies``,
+    never a deployment variable.
+    """
+
+    model_config = SETTINGS_CONFIG
+
+    #: Where every "Open in AequorOS" button and preferences link points. The
+    #: same variable the staff console and BI subscriptions read.
+    bank_app_base_url: str = Field(default=DEFAULT_BANK_APP_BASE_URL, alias="BANK_APP_BASE_URL")
+    #: A non-production safety valve. When set, email is delivered only to these
+    #: addresses or ``@domains`` (comma-separated); every other recipient's
+    #: delivery is recorded as ``suppressed`` with the reason, so a development
+    #: database full of real-looking users can never mail them.
+    email_allowlist: str | None = Field(default=None, alias="NOTIFICATION_EMAIL_ALLOWLIST")
+    #: Delivery attempts before a message is dead-lettered. Permanent refusals
+    #: (unknown mailbox, rejected sender) dead-letter on the first attempt.
+    max_attempts: int = Field(default=6, ge=1, le=12, alias="NOTIFICATION_MAX_ATTEMPTS")
+    #: How many due deliveries one dispatch run drains before re-queuing itself.
+    dispatch_batch_size: int = Field(default=100, ge=1, le=1000, alias="NOTIFICATION_BATCH_SIZE")
+
+    @field_validator("bank_app_base_url", mode="before")
+    @classmethod
+    def default_bank_app_base_url(cls, value: str | None) -> str:
+        if value is None or not str(value).strip():
+            return DEFAULT_BANK_APP_BASE_URL
+        return str(value).strip().rstrip("/")
+
+    @field_validator("email_allowlist", mode="before")
+    @classmethod
+    def empty_allowlist_means_unset(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            return None
+        return value
+
+    def allowlist_entries(self) -> tuple[str, ...]:
+        """Lower-cased addresses and ``@domain`` entries; empty means no allowlist."""
+        if self.email_allowlist is None:
+            return ()
+        return tuple(
+            entry.strip().lower() for entry in self.email_allowlist.split(",") if entry.strip()
+        )
+
+
 class AttestationSettings(BaseSettings):
     """Attestation & e-signature configuration (docs/attestation_esignature.md).
 
@@ -1240,6 +1289,7 @@ class Settings(BaseSettings):
     bi: BiSettings = Field(default_factory=BiSettings)
     worker: WorkerSettings = Field(default_factory=WorkerSettings)
     smtp: SmtpSettings = Field(default_factory=SmtpSettings)
+    notifications: NotificationSettings = Field(default_factory=NotificationSettings)
     attestation: AttestationSettings = Field(default_factory=AttestationSettings)
     tsa: TsaSettings = Field(default_factory=TsaSettings)
 
@@ -1380,11 +1430,47 @@ class OperatorSettings(BaseSettings):
     #: where to hand the operator off with the impersonation token. Never a
     #: secret — just where the read-only examiner view is rendered.
     bank_app_base_url: str = Field(default=DEFAULT_BANK_APP_BASE_URL, alias="BANK_APP_BASE_URL")
+    #: The reporting gateway this control plane enrols banks on (``gateway/``).
+    #: Unset, the console's "Enrol on the gateway" action answers 503.
+    reporting_gateway_url: str | None = Field(default=None, alias="REPORTING_GATEWAY_URL")
+    #: Which gateway environment enrolled banks are issued clients for.
+    reporting_gateway_environment: Literal["sandbox", "production"] = Field(
+        default="sandbox", alias="REPORTING_GATEWAY_ENVIRONMENT"
+    )
+    #: Directory holding the operator API client: ``operator.json`` (``client_id``,
+    #: ``key_file``, ``certificate_file``) and the files it names, as the gateway
+    #: writes them (``gateway/api/.keys/operator/`` in local). Never repository files.
+    reporting_gateway_operator_dir: str | None = Field(
+        default=None, alias="REPORTING_GATEWAY_OPERATOR_DIR"
+    )
+    #: Local/test only: send client certificates in the header a gateway's TLS
+    #: terminator would set, for a gateway running without one.
+    reporting_gateway_forward_client_certificate: bool = Field(
+        default=False, alias="REPORTING_GATEWAY_FORWARD_CLIENT_CERTIFICATE"
+    )
+    #: Renew enrolled banks' gateway client certificates on a schedule, from this
+    #: staff plane (the only process holding the gateway operator credential).
+    #: On by default: a lapsed certificate stops a bank filing.
+    reporting_gateway_renewal_enabled: bool = Field(
+        default=True, alias="REPORTING_GATEWAY_RENEWAL_ENABLED"
+    )
+    #: How many days before expiry a certificate is renewed.
+    reporting_gateway_renew_before_days: int = Field(
+        default=30, ge=7, le=180, alias="REPORTING_GATEWAY_RENEW_BEFORE_DAYS"
+    )
+    #: How often the scheduled check runs (seconds).
+    reporting_gateway_renewal_check_seconds: int = Field(
+        default=21600, ge=300, le=86400, alias="REPORTING_GATEWAY_RENEWAL_CHECK_SECONDS"
+    )
 
     @model_validator(mode="after")
     def guard_google_policy_test_mode(self) -> OperatorSettings:
         if self.oidc_google_policy_test_mode and not is_undeployed_environment():
             raise ValueError("OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE is limited to local/test.")
+        if self.reporting_gateway_forward_client_certificate and not is_undeployed_environment():
+            raise ValueError(
+                "REPORTING_GATEWAY_FORWARD_CLIENT_CERTIFICATE is limited to local/test."
+            )
         return self
 
     @property
@@ -1401,6 +1487,8 @@ class OperatorSettings(BaseSettings):
         "oidc_client_id",
         "google_credentials_file",
         "google_delegated_admin",
+        "reporting_gateway_url",
+        "reporting_gateway_operator_dir",
         mode="before",
     )
     @classmethod

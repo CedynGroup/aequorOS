@@ -32,6 +32,13 @@ import {
   ReadAtToJSON,
   ReadAtToJSONTyped,
 } from "./ReadAt";
+import type { EventKey } from "./EventKey";
+import {
+  EventKeyFromJSON,
+  EventKeyFromJSONTyped,
+  EventKeyToJSON,
+  EventKeyToJSONTyped,
+} from "./EventKey";
 import type { NotificationSeverity } from "./NotificationSeverity";
 import {
   NotificationSeverityFromJSON,
@@ -39,6 +46,13 @@ import {
   NotificationSeverityToJSON,
   NotificationSeverityToJSONTyped,
 } from "./NotificationSeverity";
+import type { ActionPath } from "./ActionPath";
+import {
+  ActionPathFromJSON,
+  ActionPathFromJSONTyped,
+  ActionPathToJSON,
+  ActionPathToJSONTyped,
+} from "./ActionPath";
 import type { RecipientUserId } from "./RecipientUserId";
 import {
   RecipientUserIdFromJSON,
@@ -53,6 +67,12 @@ import {
  * @interface NotificationRead
  */
 export interface NotificationRead {
+  /**
+   *
+   * @type {ActionPath}
+   * @memberof NotificationRead
+   */
+  actionPath?: ActionPath;
   /**
    *
    * @type {string}
@@ -77,6 +97,12 @@ export interface NotificationRead {
    * @memberof NotificationRead
    */
   entityType: EntityType;
+  /**
+   *
+   * @type {EventKey}
+   * @memberof NotificationRead
+   */
+  eventKey?: EventKey;
   /**
    *
    * @type {string}
@@ -149,10 +175,18 @@ export function NotificationReadFromJSONTyped(
   }
   return {
     ...json,
+    actionPath:
+      json["action_path"] == null
+        ? undefined
+        : ActionPathFromJSON(json["action_path"]),
     body: json["body"],
     createdAt: new Date(json["created_at"]),
     entityId: EntityIdFromJSON(json["entity_id"]),
     entityType: EntityTypeFromJSON(json["entity_type"]),
+    eventKey:
+      json["event_key"] == null
+        ? undefined
+        : EventKeyFromJSON(json["event_key"]),
     id: json["id"],
     readAt: ReadAtFromJSON(json["read_at"]),
     recipientUserId: RecipientUserIdFromJSON(json["recipient_user_id"]),
@@ -175,10 +209,12 @@ export function NotificationReadToJSONTyped(
   }
 
   return {
+    action_path: ActionPathToJSON(value["actionPath"]),
     body: value["body"],
     created_at: value["createdAt"].toISOString(),
     entity_id: EntityIdToJSON(value["entityId"]),
     entity_type: EntityTypeToJSON(value["entityType"]),
+    event_key: EventKeyToJSON(value["eventKey"]),
     id: value["id"],
     read_at: ReadAtToJSON(value["readAt"]),
     recipient_user_id: RecipientUserIdToJSON(value["recipientUserId"]),

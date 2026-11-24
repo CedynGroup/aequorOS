@@ -289,13 +289,16 @@ def _supersede_prior(  # noqa: PLR0913 - the supersession key is its named parts
     # correcting version exists only under a granted resubmission request
     # (LRT guide §5.3). The grant is one-shot — consumed by this regeneration.
     resubmission_authorization = None
-    if prior_current is not None and prior_current.status == "acknowledged":
+    if prior_current is not None and prior_current.status in ("acknowledged", "submitted"):
         from app.reporting.service.workflow import (  # noqa: PLC0415
             granted_unconsumed_resubmission,
         )
 
+        # A granted correction is consumed by the regeneration it authorised. A
+        # filing still awaiting the regulator may be regenerated without one, but
+        # when one was granted, this is the version it was granted for.
         resubmission_authorization = granted_unconsumed_resubmission(db, prior_current)
-        if resubmission_authorization is None:
+        if resubmission_authorization is None and prior_current.status == "acknowledged":
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
@@ -422,6 +425,7 @@ def _generate_package(
     _enrich_institution_block(db, ctx, bank, generated.snapshot)
     _stamp_basis(generated.snapshot, payload.basis)
     _stamp_template_revision(definition, generated.snapshot)
+    _stamp_formula_workbook(definition, generated.snapshot)
     _stamp_provenance(
         db,
         ctx,
@@ -886,6 +890,21 @@ def _stamp_template_revision(definition: ReturnDefinition, snapshot: dict[str, A
     revision = TEMPLATE_REVISIONS.get(definition.template_id)
     if revision is not None:
         snapshot.setdefault("metadata", {})["template_revision"] = revision
+
+
+def _stamp_formula_workbook(definition: ReturnDefinition, snapshot: dict[str, Any]) -> None:
+    """Record that this package's formula workbook is filed with it (2026-11-23).
+
+    The workbook states on its face whether it is filed, so the statement must be
+    fixed at generation: a package generated before the decision carries no stamp
+    and renders its original wording, byte for byte (D-021).
+    """
+    from app.reporting.service.workflow import (  # noqa: PLC0415 - import cycle
+        WORKING_ARTIFACT_FILING_GENERATORS,
+    )
+
+    if definition.generator in WORKING_ARTIFACT_FILING_GENERATORS.get("xlsx_working", frozenset()):
+        snapshot.setdefault("metadata", {})["formula_workbook"] = "filed"
 
 
 def _stamp_basis(snapshot: dict[str, Any], basis: str) -> None:

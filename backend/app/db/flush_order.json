@@ -212,5 +212,9 @@
   "TenantStorage": "app.models.operator.TenantStorage",
   "TranslationFailure": "app.models.ingestion.TranslationFailure",
   "User": "app.models.user.User",
-  "WorkerHeartbeat": "app.models.live.WorkerHeartbeat"
+  "WorkerHeartbeat": "app.models.live.WorkerHeartbeat",
+  "NotificationDelivery": "app.models.notification.NotificationDelivery",
+  "NotificationPreference": "app.models.notification.NotificationPreference",
+  "NotificationPolicy": "app.models.notification.NotificationPolicy",
+  "NotificationSettings": "app.models.notification.NotificationSettings"
 }

@@ -23,6 +23,7 @@ import { CHANNEL_LABELS } from "./shared";
 import { submissionPortal } from "@/lib/format";
 
 const CHANNEL_OPTIONS: ChannelCode[] = [
+  "reporting_gateway",
   "orass_api",
   "orass_sandbox",
   "email",
@@ -213,7 +214,7 @@ export default function TransmissionCard({
           ))}
         </select>
         <span className="text-caption text-slate">
-          Set from this return&apos;s registry entry.
+          The default comes from your reporting settings.
         </span>
       </label>
 

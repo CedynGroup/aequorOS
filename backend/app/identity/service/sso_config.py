@@ -171,20 +171,37 @@ def find_enabled_by_issuer_audience(
     issuer/audience tuple cannot be allowed to choose an organization's identity
     namespace by database row order.
     """
-    raw_audiences = cast(list[object], audience) if isinstance(audience, list) else [audience]
-    if len(raw_audiences) > _MAX_ROUTING_AUDIENCES:
-        return None
-    audiences = sorted({value for value in raw_audiences if isinstance(value, str) and value})
+    audiences = routing_audiences(audience)
     if not audiences:
         return None
     connections = db.scalars(
         select(SsoConnection).where(
             SsoConnection.enabled.is_(True),
-            SsoConnection.issuer == issuer.rstrip("/"),
+            SsoConnection.issuer == routing_issuer(issuer),
             SsoConnection.client_id.in_(audiences),
         )
     ).all()
     return connections[0] if len(connections) == 1 else None
+
+
+def routing_issuer(issuer: str) -> str:
+    """The stored form of an issuer hint."""
+    return issuer.rstrip("/")
+
+
+def routing_audiences(audience: object) -> list[str]:
+    """The string audiences an unverified ``aud`` claim may route by, or none."""
+    raw_audiences = cast(list[object], audience) if isinstance(audience, list) else [audience]
+    if len(raw_audiences) > _MAX_ROUTING_AUDIENCES:
+        return []
+    return sorted({value for value in raw_audiences if isinstance(value, str) and value})
+
+
+#: Phase 1 is one IdP per deployment (see :func:`resolve_client_config`).
+MULTIPLE_ENABLED_CONNECTIONS = HTTPException(
+    status_code=status.HTTP_409_CONFLICT,
+    detail="Multiple enabled SSO connections; per-org sign-in is not built yet.",
+)
 
 
 def resolve_client_config(db: Session) -> SsoClientConfig | None:
@@ -198,10 +215,7 @@ def resolve_client_config(db: Session) -> SsoClientConfig | None:
     if not connections:
         return None
     if len(connections) > 1:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Multiple enabled SSO connections; per-org sign-in is not built yet.",
-        )
+        raise MULTIPLE_ENABLED_CONNECTIONS
     connection = connections[0]
     return SsoClientConfig(
         issuer=connection.issuer,

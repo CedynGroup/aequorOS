@@ -920,17 +920,48 @@ def evaluate_balance_identity(
 ) -> reconciliation.BalanceIdentityOutcome | None:
     """The identity verdict for the CURRENT canonical book at ``as_of_date``.
 
-    Read-only and side-effect free: it loads the same canonical state
-    :func:`derive_facts` would, runs only the balance-sheet block, and returns
-    that block's verdict. No period, fact, audit event or run is written, so a
-    filing-plane caller can ask "does this bank's book balance *now*?" without
-    re-deriving anything (audit 2026-08-22 D-3).
+    Read-only and side-effect free: no period, fact, audit event or run is
+    written, so a filing-plane caller can ask "does this bank's book balance
+    *now*?" without re-deriving anything (audit 2026-08-22 D-3).
+
+    The identity needs only per-position-type totals from the book (see
+    :func:`_identity_from_totals`), so the database adds them up and returns one
+    row per type instead of every position record; that is what keeps approving,
+    certifying and filing a return fast on a six-figure book. When a row's
+    reporting-currency amount cannot be read that way, it falls back to loading
+    the book row by row (:func:`_identity_from_book`) and behaves exactly as it
+    always has.
 
     ``None`` means NOT ASSESSED, never "reconciled": an as-of with no accepted
     position snapshots has no canonical book for the control to weigh, and
     dressing that up as a pass is precisely the silent substitution this module
     exists to stop. Callers must treat ``None`` as the absence of an answer.
     """
+    base_currency = jurisdictions.base_currency(bank)
+    totals = position_book.stated_totals_by_type(db, ctx, bank, as_of_date, base_currency)
+    if totals is None:
+        return _identity_from_book(db, ctx, bank, as_of_date)
+    if not totals:
+        return None
+    gl_accounts, gl_chart_as_of, gl_retired = _load_gl(db, ctx, bank, as_of_date)
+    canonical = _Canonical(
+        as_of=as_of_date,
+        base_currency=base_currency,
+        positions=[],
+        gl_accounts=gl_accounts,
+        gl_chart_as_of=gl_chart_as_of,
+        gl_retired=gl_retired,
+        refs=_load_refs(db, ctx, bank, as_of_date, kinds=("capital_structure",)),
+        reconciliation=reconciliation.load_policy(db, ctx.organization_id, bank, as_of_date),
+        central_bank_names=_central_bank_names(db, bank),
+    )
+    return _identity_from_totals(canonical, totals)
+
+
+def _identity_from_book(
+    db: Session, ctx: TenantContext, bank: Bank, as_of_date: date
+) -> reconciliation.BalanceIdentityOutcome | None:
+    """The identity from the whole book, row by row, through the balance-sheet block."""
     canonical = _load_canonical(db, ctx, bank, as_of_date)
     if not canonical.positions:
         return None
@@ -939,6 +970,60 @@ def evaluate_balance_identity(
     # answer.
     groups: list[GroupResult] = []
     *_rest, identity = _derive_balance_sheet_block(canonical, groups)
+    return identity
+
+
+def _identity_from_totals(
+    canonical: _Canonical, totals: Mapping[str, position_book.PositionTypeTotal]
+) -> reconciliation.BalanceIdentityOutcome:
+    """The balance-sheet block's two totals, from per-position-type totals.
+
+    Every position line :func:`_derive_balance_sheet_block` adds into the
+    identity partitions one position type's stated rows, so the identity needs
+    only each type's sum: ``loans_gross`` is every stated LOAN;
+    bills + bonds + non-sovereign securities (carried in other assets) is every
+    stated SECURITY_HOLDING; the five deposit lines add back to every stated
+    DEPOSIT balance (each split is ``share`` and ``balance - share``); secured
+    plus term funding is every stated INTERBANK_BORROWING; and interbank
+    placements are every stated INTERBANK_PLACEMENT. The GL lines and the equity
+    line come from the same helpers the block uses, gated by which position types
+    exist. ``test_balance_identity_totals_match_book`` holds the two paths equal.
+    """
+
+    def present(position_type: str) -> bool:
+        total = totals.get(position_type)
+        return total is not None and total.rows > 0
+
+    def stated(position_type: str) -> Decimal:
+        total = totals.get(position_type)
+        return total.stated if total is not None else _ZERO
+
+    coverage = _GlCoverage(
+        securities=present("SECURITY_HOLDING"),
+        loans=present("LOAN"),
+        interbank_placements=present("INTERBANK_PLACEMENT"),
+        deposits=present("DEPOSIT"),
+        interbank_borrowings=present("INTERBANK_BORROWING"),
+    )
+    warnings: list[str] = []
+    cash, gl_other_assets = _classify_gl_assets(canonical, coverage, warnings)
+    uncovered_borrowings, gl_equity, _unreconciled = _classify_gl_funding(
+        canonical, coverage, warnings
+    )
+    capital_total, _capital_note = _capital_total(canonical, gl_equity, warnings)
+    assets_total = (
+        sum(cash.values(), _ZERO)
+        + stated("SECURITY_HOLDING")
+        + stated("LOAN")
+        + gl_other_assets
+        + stated("INTERBANK_PLACEMENT")
+    )
+    funding_total = (
+        stated("DEPOSIT") + stated("INTERBANK_BORROWING") + uncovered_borrowings + capital_total
+    )
+    identity, _plug, _plug_target = canonical.reconciliation.evaluate_balance_identity(
+        assets_total, funding_total, plug_when_blocked=False
+    )
     return identity
 
 
@@ -977,7 +1062,35 @@ def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
         _position_row(snapshot, position, product, counterparty, base_currency)
         for snapshot, position, counterparty, product in records
     ]
+    gl_accounts, gl_chart_as_of, gl_retired = _load_gl(db, ctx, bank, as_of)
+    refs = _load_refs(db, ctx, bank, as_of)
 
+    market_curve, market_spots, market_fx_history = _load_market_data(db, ctx, bank, as_of)
+    policy = reconciliation.load_policy(db, ctx.organization_id, bank, as_of)
+    return _Canonical(
+        as_of=as_of,
+        base_currency=base_currency,
+        positions=positions,
+        credit_source_basis=position_book.credit_source_basis(records),
+        gl_accounts=gl_accounts,
+        gl_chart_as_of=gl_chart_as_of,
+        gl_retired=gl_retired,
+        refs=refs,
+        reconciliation=policy,
+        source_overlap=_source_overlap(positions, policy),
+        sovereign_issuer_names=_sovereign_issuer_names(db, bank),
+        domestic_country=bank.jurisdiction_code,
+        central_bank_names=_central_bank_names(db, bank),
+        market_curve=market_curve,
+        market_spots=market_spots,
+        market_fx_history=market_fx_history,
+    )
+
+
+def _load_gl(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> tuple[list[CanonicalGlAccount], date | None, tuple[tuple[str, str, Decimal], ...]]:
+    """The chart of accounts in force at ``as_of`` (see :func:`_resolve_gl_chart`)."""
     # The whole current GL history at or before the as-of, INCLUDING rows with
     # no balance: a balance-less row still proves the code is on the chart, and
     # the chart is what decides whether an older balance may be carried forward.
@@ -993,10 +1106,18 @@ def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
             CanonicalGlAccount.validation_status.in_(_INCLUDED_VALIDATION_STATUSES),
         )
     ).all()
-    gl_accounts, gl_chart_as_of, gl_retired = _resolve_gl_chart(
-        [(account, mode) for account, mode in gl_rows]
-    )
+    return _resolve_gl_chart([(account, mode) for account, mode in gl_rows])
 
+
+def _load_refs(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    as_of: date,
+    *,
+    kinds: tuple[str, ...] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    """Each reference dataset's latest batch at or before ``as_of`` (only ``kinds``, if given)."""
     refs: dict[str, list[dict[str, Any]]] = {}
     # Latest ingestion batch per dataset kind. Postgres has no max(uuid), so the
     # winner is picked in Python: newest created_at, then the batch UUIDv7 text
@@ -1011,6 +1132,7 @@ def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
             CanonicalReferenceRow.organization_id == ctx.organization_id,
             CanonicalReferenceRow.bank_id == bank.id,
             CanonicalReferenceRow.as_of_date <= as_of,
+            *((CanonicalReferenceRow.dataset_kind.in_(kinds),) if kinds is not None else ()),
         )
         .group_by(
             CanonicalReferenceRow.dataset_kind,
@@ -1036,26 +1158,7 @@ def _load_canonical(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
         ).all()
         refs[kind] = list(payloads)
 
-    market_curve, market_spots, market_fx_history = _load_market_data(db, ctx, bank, as_of)
-    policy = reconciliation.load_policy(db, ctx.organization_id, bank, as_of)
-    return _Canonical(
-        as_of=as_of,
-        base_currency=base_currency,
-        positions=positions,
-        credit_source_basis=position_book.credit_source_basis(records),
-        gl_accounts=gl_accounts,
-        gl_chart_as_of=gl_chart_as_of,
-        gl_retired=gl_retired,
-        refs=refs,
-        reconciliation=policy,
-        source_overlap=_source_overlap(positions, policy),
-        sovereign_issuer_names=_sovereign_issuer_names(db, bank),
-        domestic_country=bank.jurisdiction_code,
-        central_bank_names=_central_bank_names(db, bank),
-        market_curve=market_curve,
-        market_spots=market_spots,
-        market_fx_history=market_fx_history,
-    )
+    return refs
 
 
 def _resolve_gl_chart(
@@ -1835,6 +1938,57 @@ def _split_deposits(canonical: _Canonical, warnings: list[str]) -> _DepositSplit
     return split
 
 
+def _capital_total(
+    canonical: _Canonical, gl_equity: Decimal, warnings: list[str]
+) -> tuple[Decimal, str]:
+    """The balance sheet's equity line and where it came from (with its warnings)."""
+    capital_rows = list(canonical.refs.get("capital_structure", ()))
+    capital_amounts = [_dec_or_none(payload.get("amount_ghs")) for payload in capital_rows]
+    capital_register_total = sum(
+        (amount for amount in capital_amounts if amount is not None), _ZERO
+    )
+    missing_capital_amounts = sum(1 for amount in capital_amounts if amount is None)
+    if missing_capital_amounts:
+        # A capital_structure row with no amount contributes nothing here and is
+        # already skipped by _derive_capital_components. Say so: it is a real
+        # shortfall in equity, and the balance-sheet identity control below is
+        # what stops it from being plugged away in silence.
+        warnings.append(
+            f"{missing_capital_amounts} capital_structure row(s) carry no amount_ghs and "
+            "contribute nothing to the capital components. Regulatory capital is understated "
+            "by whatever they hold."
+        )
+    # ``capital_total`` is the balance sheet's EQUITY line, so it is the ledger's
+    # equity. ``capital_structure`` is the REGULATORY CAPITAL register — it
+    # carries Tier 2 subordinated debt (a liability) and regulatory deductions
+    # (goodwill, DTA), which is why it was the wrong source: the identity was
+    # measuring accounting assets against regulatory capital. The register keeps
+    # its real job, the ``capital_component`` facts, untouched.
+    has_gl_equity = any(
+        account.account_class == "EQUITY" and account.balance is not None
+        for account in canonical.gl_accounts
+    )
+    if has_gl_equity:
+        capital_total = gl_equity
+        capital_note = "GL equity accounts"
+    else:
+        capital_total = capital_register_total
+        capital_note = "capital_structure Σ signed amounts (no GL equity accounts ingested)"
+        if capital_rows:
+            warnings.append(
+                "No GL equity accounts were ingested, so the balance sheet's equity line falls "
+                "back to the regulatory capital register, which includes Tier 2 instruments and "
+                "regulatory deductions. Ingest the GL equity block for an accounting equity."
+            )
+    if capital_total == _ZERO:
+        warnings.append(
+            "Neither GL equity accounts nor capital_structure reference rows were found; "
+            "capital_total is zero and capital-dependent modules will fail until capital data "
+            "is ingested."
+        )
+    return capital_total, capital_note
+
+
 def _derive_balance_sheet_block(  # noqa: PLR0912, PLR0915 - one linear balance-sheet assembly
     canonical: _Canonical, groups: list[GroupResult], *, live: bool = False
 ) -> tuple[
@@ -1904,50 +2058,7 @@ def _derive_balance_sheet_block(  # noqa: PLR0912, PLR0915 - one linear balance-
             "the borrowing sub-ledger to bucket them by their real maturity."
         )
 
-    capital_rows = list(canonical.refs.get("capital_structure", ()))
-    capital_amounts = [_dec_or_none(payload.get("amount_ghs")) for payload in capital_rows]
-    capital_register_total = sum(
-        (amount for amount in capital_amounts if amount is not None), _ZERO
-    )
-    missing_capital_amounts = sum(1 for amount in capital_amounts if amount is None)
-    if missing_capital_amounts:
-        # A capital_structure row with no amount contributes nothing here and is
-        # already skipped by _derive_capital_components. Say so: it is a real
-        # shortfall in equity, and the balance-sheet identity control below is
-        # what stops it from being plugged away in silence.
-        warnings.append(
-            f"{missing_capital_amounts} capital_structure row(s) carry no amount_ghs and "
-            "contribute nothing to the capital components. Regulatory capital is understated "
-            "by whatever they hold."
-        )
-    # ``capital_total`` is the balance sheet's EQUITY line, so it is the ledger's
-    # equity. ``capital_structure`` is the REGULATORY CAPITAL register — it
-    # carries Tier 2 subordinated debt (a liability) and regulatory deductions
-    # (goodwill, DTA), which is why it was the wrong source: the identity was
-    # measuring accounting assets against regulatory capital. The register keeps
-    # its real job, the ``capital_component`` facts, untouched.
-    has_gl_equity = any(
-        account.account_class == "EQUITY" and account.balance is not None
-        for account in canonical.gl_accounts
-    )
-    if has_gl_equity:
-        capital_total = gl_equity
-        capital_note = "GL equity accounts"
-    else:
-        capital_total = capital_register_total
-        capital_note = "capital_structure Σ signed amounts (no GL equity accounts ingested)"
-        if capital_rows:
-            warnings.append(
-                "No GL equity accounts were ingested, so the balance sheet's equity line falls "
-                "back to the regulatory capital register, which includes Tier 2 instruments and "
-                "regulatory deductions. Ingest the GL equity block for an accounting equity."
-            )
-    if capital_total == _ZERO:
-        warnings.append(
-            "Neither GL equity accounts nor capital_structure reference rows were found; "
-            "capital_total is zero and capital-dependent modules will fail until capital data "
-            "is ingested."
-        )
+    capital_total, capital_note = _capital_total(canonical, gl_equity, warnings)
 
     other_assets = gl_other_assets + non_sovereign_securities + interbank_placements
     assets_total = sum(cash.values(), _ZERO) + bills + bonds + loans_gross + other_assets

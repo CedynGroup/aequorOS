@@ -205,9 +205,16 @@ services:
       start_period: 20s
     env_file:
       - .env
+    # reporting-gateway-operator: the AequorOS platform's operator client on the
+    # AequorOS Reporting Gateway (enrolment and certificate renewal run in this
+    # process only). Issued by the gateway and loaded into this volume as
+    # gateway/deploy/README.md describes; REPORTING_GATEWAY_OPERATOR_DIR names the
+    # folder inside it. Empty until then, and the console says enrolment is not
+    # configured.
     volumes:
       - service-trust:/run/trust:ro
       - operator-tls:/run/tls:ro
+      - reporting-gateway-operator:/run/reporting-gateway-operator:ro
     environment:
       APP_ENV: "production"
       TLS_ALLOW_PLAINTEXT: "0"
@@ -225,3 +232,8 @@ volumes:
   operator-tls:
     external: true
     name: aequoros-operator-tls
+  # Created once on the host BEFORE the deploy that adds it, like the volumes above
+  # (gateway/deploy/README.md, step 7): a missing external volume fails the deploy.
+  reporting-gateway-operator:
+    external: true
+    name: aequoros-reporting-gateway-operator

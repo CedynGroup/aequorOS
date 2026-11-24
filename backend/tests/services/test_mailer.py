@@ -6,9 +6,9 @@ the relay is opened once, STARTTLS and login happen only when configured and in
 that order, and a transport exception travels INTACT — the mirror records
 ``type(exc).__name__`` in its job progress, so wrapping it would silently rename
 every historical failure.
-``tests/notifications/service/test_notification_email_mirror_integration.py`` is
-the other half: it exercises the original caller, unchanged, over the new
-transport.
+The mirror has since become the notification dispatcher;
+``tests/notifications/service/test_notification_dispatch_integration.py`` exercises
+that caller over this transport.
 
 **No socket is ever opened here.** ``smtplib.SMTP`` is replaced by a fake that
 records what it was asked to do, exactly as the mirror's own suite does it.
@@ -87,8 +87,8 @@ def relay(monkeypatch: pytest.MonkeyPatch) -> type[_FakeSmtp]:
 
 @pytest.fixture
 def _no_relay(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("SMTP_HOST", raising=False)
-    monkeypatch.delenv("SMTP_FROM", raising=False)
+    monkeypatch.setenv("SMTP_HOST", "")
+    monkeypatch.setenv("SMTP_FROM", "")
     get_settings.cache_clear()
     monkeypatch.setattr(smtplib, "SMTP", _FakeSmtp)
 
@@ -183,6 +183,24 @@ def test_a_composed_message_is_plain_text_with_the_subject_convention(
     assert str(message["To"]) == "a@bank.test, b@bank.test"
     assert message.get_content_type() == "text/plain"
     assert message.get_content() == "One line.\nAnother.\n"
+    assert str(message["Auto-Submitted"]) == "auto-generated"
+
+
+def test_an_html_alternative_keeps_the_plain_text_first(relay: type[_FakeSmtp]) -> None:
+    """The plain text is always complete; HTML is an alternative, never a replacement."""
+    message = mailer.compose(
+        subject="s",
+        body="Plain body.",
+        html="<p>Rich body.</p>",
+        recipients=["a@bank.test"],
+        sender_address=SENDER,
+        message_id="<abc@bank.test>",
+    )
+    assert message.get_content_type() == "multipart/alternative"
+    parts = list(message.iter_parts())
+    assert [part.get_content_type() for part in parts] == ["text/plain", "text/html"]
+    assert parts[0].get_content() == "Plain body.\n"
+    assert str(message["Message-ID"]) == "<abc@bank.test>"
 
 
 def test_an_attachment_travels_as_its_own_part_with_its_own_type(

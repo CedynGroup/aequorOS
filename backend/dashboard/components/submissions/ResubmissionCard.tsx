@@ -58,6 +58,9 @@ export default function ResubmissionCard({
 
   const manualDecide =
     latestSubmittedChannel === "email" || latestSubmittedChannel === "manual";
+  // The gateway takes a correction as an amendment that states its reason, so a
+  // correction is recorded, not asked for, and the service grants it by rule.
+  const viaGateway = latestSubmittedChannel === "reporting_gateway";
   const hasOpenRequest = requests.some((entry) => entry.status === "requested");
   const grantedPending = requests.some(
     (entry) => entry.status === "granted" && entry.consumedByPackageId == null,
@@ -66,9 +69,19 @@ export default function ResubmissionCard({
   return (
     <div className="space-y-3">
       <p className="text-caption text-slate leading-relaxed">
-        A return that has already been filed can only be corrected with{" "}
-        {regulatorName}&apos;s go-ahead. Ask for it here, then generate the
-        corrected version once it is granted.
+        {viaGateway ? (
+          <>
+            The gateway takes a correction to a filed return as an amendment
+            that says why. Record the reason here; the preparer then generates
+            the corrected version, and it is filed as an amendment of this one.
+          </>
+        ) : (
+          <>
+            A return that has already been filed can only be corrected with{" "}
+            {regulatorName}&apos;s go-ahead. Ask for it here, then generate the
+            corrected version once it is granted.
+          </>
+        )}
       </p>
 
       {canRequest && !hasOpenRequest && (
@@ -80,7 +93,7 @@ export default function ResubmissionCard({
               className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-caption font-medium text-navy hover:bg-surface"
             >
               <RotateCcw size={13} aria-hidden />
-              Ask to resubmit
+              {viaGateway ? "Record a correction" : "Ask to resubmit"}
             </button>
           ) : (
             <div className="space-y-2 max-w-2xl">
@@ -115,7 +128,7 @@ export default function ResubmissionCard({
                   ) : (
                     <RotateCcw size={13} aria-hidden />
                   )}
-                  Send the request
+                  {viaGateway ? "Record the correction" : "Send the request"}
                 </button>
                 <button
                   type="button"
@@ -145,8 +158,9 @@ export default function ResubmissionCard({
 
       {grantedPending && (
         <p className="rounded-sm border border-success/25 bg-success-light/50 px-3 py-2 text-caption leading-relaxed text-navy/85">
-          Granted. Generating the corrected version is the preparer&apos;s act;
-          the next filing carries the next revision number.
+          {viaGateway
+            ? "Recorded. The preparer generates the corrected version next; it goes to the gateway with this reason."
+            : "Granted. Generating the corrected version is the preparer's act; the next filing carries the next revision number."}
         </p>
       )}
 

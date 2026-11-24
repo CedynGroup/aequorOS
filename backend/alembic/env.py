@@ -57,8 +57,14 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        if connection.dialect.name == "postgresql" and make_url(url).username == "aqs_migrator":
-            connection.exec_driver_sql("SET ROLE aqs_owner")
+        if connection.dialect.name == "postgresql":
+            if make_url(url).username == "aqs_migrator":
+                connection.exec_driver_sql("SET ROLE aqs_owner")
+            # Production's migration role runs with row_security=off, so planning a
+            # LANGUAGE sql body that reads an RLS table at CREATE time raises instead of
+            # filtering. Defer body validation to first call, as pg_restore does; the
+            # setting is per session and must outlive autocommit blocks.
+            connection.exec_driver_sql("SET check_function_bodies = off")
             connection.commit()
         context.configure(connection=connection, target_metadata=target_metadata)
 

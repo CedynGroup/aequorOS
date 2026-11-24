@@ -107,6 +107,14 @@ def _isolate_test_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MIGRATION_DATABASE_URL", "")
     monkeypatch.setenv("WORKER_DATABASE_URL", "")
     monkeypatch.setenv("CORS_ORIGINS", "")
+    # A developer's local relay must never send mail from the suite, and its
+    # allowlist must not suppress fixture recipients: tests that exercise
+    # delivery configure a fake relay explicitly.
+    monkeypatch.setenv("SMTP_HOST", "")
+    monkeypatch.setenv("SMTP_FROM", "")
+    monkeypatch.setenv("SMTP_USERNAME", "")
+    monkeypatch.setenv("SMTP_PASSWORD", "")
+    monkeypatch.setenv("NOTIFICATION_EMAIL_ALLOWLIST", "")
     monkeypatch.setenv("LOG_LEVEL", "INFO")
     # Same .env-leak guard: a developer's local CREDENTIAL_VAULT_MASTER_KEY must
     # not leak in, or tests asserting the "vault unconfigured" path (credential

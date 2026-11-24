@@ -22,6 +22,7 @@ from app.api.deps import TenantContext
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.liquidity.service import regulatory_liquidity
 from app.models import (
+    Bank,
     BankReportingPeriod,
     RegulatoryPackage,
     RegulatoryPackageArtifact,
@@ -36,6 +37,7 @@ from app.reporting.schemas.packages import (
 )
 from app.reporting.service import channel_config, generation, validation, workflow
 from app.reporting.service.common import read_package
+from app.reporting.service.reporting_gateway_connection import gateway_channel_for_submission
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -290,6 +292,45 @@ def test_denied_resubmission_keeps_acknowledged_package_immutable(
             RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
         )
     assert exc.value.status_code == 409
+
+
+def test_a_gateway_correction_is_granted_by_rule_and_carries_its_reason(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The gateway takes an institution's correction as an amendment that states its
+    # reason; there is no permission to wait for, so nothing is left "requested".
+    _seed_with_baseline_run(db_session)
+    approved = _approved_package(db_session, monkeypatch)
+    workflow.submit_package(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        approved.id,
+        channel="reporting_gateway",
+        external_ref="SRG-26-0000001",
+    )
+    reason = "Reclassified a treasury bill holding found after filing."
+
+    request = workflow.request_resubmission(
+        db_session, MAKER, SAMPLE_BANK_ID, approved.id, ResubmissionRequestCreate(reason=reason)
+    )
+
+    assert request.status == "granted"
+    assert request.decided_at is not None
+    assert request.detail["decided_by"] == "channel"
+    corrected = generation.generate_package(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
+    )
+    assert corrected.version == approved.version + 1
+    row = db_session.get(RegulatoryPackage, corrected.id)
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert row is not None and bank is not None
+    channel = gateway_channel_for_submission(db_session, bank, row, config={}, credentials=None)
+    assert channel._supersedes_receipt_id == "SRG-26-0000001"  # pyright: ignore[reportPrivateUsage]
+    assert channel._declaration["amendment_reason"] == reason  # pyright: ignore[reportPrivateUsage]
 
 
 def test_resubmission_requires_submitted_or_acknowledged(

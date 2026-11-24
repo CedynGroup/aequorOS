@@ -317,18 +317,17 @@ def test_sdi_working_xlsx_contains_live_formula_calculations(
     assert artifact.object_path.endswith("SDI-LMT-MONTHLY.working.xlsx")
     calculations = workbook["Working Calculations"]
     banner = str(calculations["A1"].value)
-    assert "WORKING COPY" in banner
-    # The SDI sheet keeps the plain working-copy wording, and that wording has
-    # to be TRUE. BoG's own formula workbook was relabelled on 2026-09-20 when
-    # it became filable; this one did not become filable, so the claim it makes
-    # about itself is asserted here against the behaviour that decides it —
-    # a label and a filing rule drifting apart is exactly what went wrong.
-    assert "not a filing artifact" in banner
+    assert "FORMULA WORKBOOK" in banner
+    # The SDI sheet's banner has to be TRUE. Since 2026-11-23 it is filed with
+    # the return, so the claim it makes about itself is asserted here against the
+    # behaviour that decides it: a label and a filing rule drifting apart is
+    # exactly what went wrong before.
+    assert "filed with the return" in banner
     definition = get_definition("SDI-LMT-MONTHLY")
     assert definition is not None
-    assert not reporting_workflow.filing_admits_artifact(
+    assert reporting_workflow.filing_admits_artifact(
         "xlsx_working", generator=definition.generator
-    ), "the banner claims it is not filed; the filing rule must agree"
+    ), "the banner says it is filed; the filing rule must agree"
     assert calculations["C13"].data_type == "f"
     assert str(calculations["C13"].value).startswith("=IFERROR(")
     assert calculations["E13"].data_type == "f"

@@ -64,16 +64,31 @@ def _current_index(column: str) -> None:
     )
 
 
+#: Rows per executemany. psycopg pipelines each batch, so a remote database costs
+#: one round trip per batch instead of one per row: production's ~174k
+#: counterparties at a 210 ms round trip were ~10 hours inside one transaction.
+BACKFILL_BATCH = 2_000
+
+
 def backfill_indexes(connection: Connection) -> None:
     metadata = sa.MetaData()
     for name in (COUNTERPARTIES, PARTIES):
         table = sa.Table(name, metadata, autoload_with=connection)
+        # index_values returns the same columns for every row of a table, so
+        # one statement serves the batch; the key cannot be named "id".
+        update = table.update().where(table.c.id == sa.bindparam("backfill_row_id"))
+        batch: list[dict[str, object]] = []
         for result in connection.execute(sa.select(table)).mappings():
             row = cast(Mapping[str, object], result)
             values = index_values(
                 name, dict(row), cast(str, row["organization_id"]), cast(str, row["bank_id"]), None
             )
-            _ = connection.execute(table.update().where(table.c.id == row["id"]).values(**values))
+            batch.append({"backfill_row_id": row["id"], **values})
+            if len(batch) == BACKFILL_BATCH:
+                _ = connection.execute(update, batch)
+                batch = []
+        if batch:
+            _ = connection.execute(update, batch)
 
 
 def upgrade() -> None:

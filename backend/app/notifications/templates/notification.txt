@@ -1,0 +1,27 @@
+{{ severity_label | upper }} · {{ category_label }}
+
+{{ message.title }}
+
+{{ greeting }}
+
+{{ message.summary }}
+{% if message.facts %}
+
+{% for fact in message.facts %}
+{{ fact.label }}: {{ fact.value }}
+{% endfor %}
+{% endif %}
+{% if message.quote %}
+
+{{ message.quote_label or "Comment" }}:
+{{ message.quote }}
+{% endif %}
+{% if action_url %}
+
+{{ message.action.label }}: {{ action_url }}
+{% endif %}
+
+--
+You received this because of your {{ category_label | lower }} notifications ({{ event.label | lower }}).
+Choose which updates reach your inbox: {{ branding.preferences_url }}
+This is an automated message from {{ branding.product_name }}. Replies to this address are not read.

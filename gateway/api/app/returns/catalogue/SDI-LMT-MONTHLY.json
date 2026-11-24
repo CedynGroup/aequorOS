@@ -1,0 +1,479 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "SDI-LMT-MONTHLY",
+ "name": "SDI Liquidity Monitoring Tools Return (LMTD Tables 1-10)",
+ "cadence": "monthly",
+ "basis": "solo",
+ "applies_to": [
+  "rural_bank",
+  "savings_and_loans",
+  "microfinance"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-sdi-lmt-monthly-v1",
+  "fidelity": "PARTIAL",
+  "workbook": null
+ },
+ "sections": [
+  {
+   "code": "prudential_ratio_inputs",
+   "title": "BOG Prudential Ratios",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Reporting Month",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "previous_month_ghs",
+     "label": "Previous Month",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "prudential_ratio_percentages",
+   "title": "BOG Prudential Ratios (%)",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Reporting Month",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "previous_month_pct",
+     "label": "Previous Month",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "threshold_min_pct",
+     "label": "Floor (%)",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "threshold_source",
+     "label": "Floor Source",
+     "kind": "text",
+     "unit": "units"
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "kind": "text",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "maturity_ladder",
+   "title": "Contractual Maturity Mismatch",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Total",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "next_day_ghs",
+     "label": "Next Day",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "d2_7_ghs",
+     "label": "2 - 7 days",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "d8_14_ghs",
+     "label": "8 - 14 days",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "d15_1m_ghs",
+     "label": "15 days to 1 mth",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "m1_2_ghs",
+     "label": "1 - 2 mths",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "m2_3_ghs",
+     "label": "2 - 3 mths",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "m3_6_ghs",
+     "label": "3 - 6 mths",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "m6_9_ghs",
+     "label": "6 - 9 mths",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "m9_12_ghs",
+     "label": "9 mths - 1 yr",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "y1_2_ghs",
+     "label": "1 - 2 yrs",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "y2_3_ghs",
+     "label": "2 - 3 yrs",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "y3_5_ghs",
+     "label": "3 - 5 yrs",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "y5_plus_ghs",
+     "label": "> 5 yrs",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "non_contractual_ghs",
+     "label": "Non-contractual",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "items_no_contractual_maturity",
+   "title": "Items with No Contractual Maturity",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Amount (GHS'000)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "collateral_rehypothecation",
+   "title": "Customer Collateral Received",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "total_amounts_ghs",
+     "label": "Total Amounts (A)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "hypothecated_ghs",
+     "label": "Amounts already hypothecated (B)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "value",
+     "label": "Amount Available C = (A-B)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "funding_concentration",
+   "title": "Funding from Significant Counterparties",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Amount of Funding",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "pct_total_liabilities",
+     "label": "Percentage of Total Liabilities",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "related_party",
+     "label": "Intragroup or related parties (Yes or No)",
+     "kind": "text",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "assets_liabilities_by_currency",
+   "title": "Assets and Liabilities by Significant Currency",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "assets_ghs",
+     "label": "Assets",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "liabilities_ghs",
+     "label": "Liabilities",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "value",
+     "label": "Mismatch (2-3)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "mismatch_pct_total_liabilities",
+     "label": "Mismatch as a Percentage of Total Liabilities",
+     "kind": "number",
+     "unit": "percent"
+    }
+   ]
+  },
+  {
+   "code": "maturity_of_exposures",
+   "title": "Time Buckets of Maturity of Exposures",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "m_lt1_ghs",
+     "label": "<1",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "m1_3_ghs",
+     "label": "1 - 3",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "m3_6_ghs",
+     "label": "3 - 6",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "m6_12_ghs",
+     "label": "6 - 12",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "m_gt12_ghs",
+     "label": ">12",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "value",
+     "label": "Total",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "deposit_funding_concentration",
+   "title": "Concentration of Deposit Funding",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Total",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "next_day_ghs",
+     "label": "Next day",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "d2_7_ghs",
+     "label": "2 to 7 days",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "d8_1m_ghs",
+     "label": "8 days to 1 month",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "m1_2_ghs",
+     "label": "1 to 2 months",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "m2_3_ghs",
+     "label": "2 to 3 months",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "m3_6_ghs",
+     "label": "3 to 6 months",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "m6_12_ghs",
+     "label": "6 to 12 months",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "m_gt12_ghs",
+     "label": "> 12 months",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "unencumbered_assets",
+   "title": "Available Unencumbered Assets",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "asset_type",
+     "label": "Asset Type & Nature",
+     "kind": "text",
+     "unit": "units"
+    },
+    {
+     "key": "location",
+     "label": "Location",
+     "kind": "text",
+     "unit": "units"
+    },
+    {
+     "key": "value",
+     "label": "Value in Cedi ('000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "haircut_pct",
+     "label": "Estimated Haircut (%)",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "monetized_value_ghs",
+     "label": "Monetized Value of Collateral",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "collateral_received",
+   "title": "Collateral Received",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Fair value available for encumbrance — Total",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "group_issued_ghs",
+     "label": "Issued by other entities of the group",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "bog_eligible_ghs",
+     "label": "BOG eligible",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "unavailable_ghs",
+     "label": "Nominal not available for encumbrance",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "totals",
+   "title": "Headline totals",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Value",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  }
+ ],
+ "rules": []
+}

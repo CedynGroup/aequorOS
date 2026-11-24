@@ -1,0 +1,235 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "CAR-RWA",
+ "name": "Capital Adequacy Return (CAR & RWA)",
+ "cadence": "monthly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd2-capital-v1",
+  "fidelity": "REPRESENTATIVE",
+  "workbook": null
+ },
+ "sections": [
+  {
+   "code": "cet1",
+   "title": "Common Equity Tier 1",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Amount (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "at1",
+   "title": "Additional Tier 1 Capital",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Amount (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "tier2",
+   "title": "Tier 2 Capital",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Amount (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "credit_rwa",
+   "title": "Credit Risk-Weighted Assets",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "balance",
+     "label": "Exposure (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "rate_pct",
+     "label": "Risk Weight (%)",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "value",
+     "label": "RWA (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "market_rwa",
+   "title": "Market Risk-Weighted Assets",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "balance",
+     "label": "Position (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "rate_pct",
+     "label": "Weight (%)",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "value",
+     "label": "RWA (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "operational_rwa",
+   "title": "Operational Risk-Weighted Assets",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "balance",
+     "label": "Gross Income (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "rate_pct",
+     "label": "Beta (%)",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "value",
+     "label": "RWA (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "capital_ratios",
+   "title": "Capital Adequacy Ratios",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Ratio (%)",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "minimum_pct",
+     "label": "BoG Minimum (%)",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "passed",
+     "label": "Compliant",
+     "kind": "text",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "headline_comparative",
+   "title": "Headline Totals vs Previous Period",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Reporting Period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "key": "prior_value",
+     "label": "Previous Period",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "totals",
+   "title": "Headline totals",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Value",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "CAR-RWA-STR-001",
+   "severity": "error",
+   "kind": "present",
+   "section": "cet1",
+   "description": "Common Equity Tier 1 is reported"
+  },
+  {
+   "id": "CAR-RWA-STR-002",
+   "severity": "error",
+   "kind": "present",
+   "section": "credit_rwa",
+   "description": "Credit Risk-Weighted Assets is reported"
+  },
+  {
+   "id": "CAR-RWA-STR-003",
+   "severity": "error",
+   "kind": "present",
+   "section": "capital_ratios",
+   "description": "Capital Adequacy Ratios is reported"
+  },
+  {
+   "id": "CAR-RWA-STR-004",
+   "severity": "error",
+   "kind": "present",
+   "section": "headline_comparative",
+   "description": "Headline Totals vs Previous Period is reported"
+  }
+ ]
+}

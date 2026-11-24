@@ -199,7 +199,13 @@ from app.market_data.models.market_desk_curves import DeskCurveDefinition
 from app.models.audit_event import AuditEvent
 from app.models.job import Job
 from app.models.organization import Organization
-from app.notifications.models import Notification
+from app.notifications.models import (
+    Notification,
+    NotificationDelivery,
+    NotificationPolicy,
+    NotificationPreference,
+    NotificationSettings,
+)
 from app.operator.models import (
     OperatorAuditLog,
     OperatorInspectorSession,
@@ -392,6 +398,10 @@ __all__ = [
     "ContingencyFundingPlan",
     "LiquidityEwiIndicator",
     "Notification",
+    "NotificationDelivery",
+    "NotificationPolicy",
+    "NotificationPreference",
+    "NotificationSettings",
     "IntegrationKey",
     "ImpliedRatingRun",
     "OperatorAuditLog",

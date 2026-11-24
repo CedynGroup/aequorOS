@@ -48,6 +48,7 @@ export const FAMILY_LABELS: Record<string, string> = {
 export const CHANNEL_LABELS: Record<ChannelCode, string> = {
   orass_api: "ORASS (API)",
   orass_sandbox: "ORASS (sandbox)",
+  reporting_gateway: "AequorOS Reporting Gateway",
   email: "Email fallback",
   manual: "Manual record",
 };

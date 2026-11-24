@@ -470,6 +470,12 @@
         },
         {
           "application": "operator",
+          "method": "GET",
+          "path": "/operator/v1/tenants/{org_id}/banks/{bank_id}/reporting-gateway",
+          "endpoint": "app.operator.api.reporting_gateway:get_reporting_gateway_enrolment"
+        },
+        {
+          "application": "operator",
           "method": "POST",
           "path": "/operator/v1/operators",
           "endpoint": "app.operator.features.operators:create_operator"
@@ -1447,6 +1453,18 @@
         },
         {
           "application": "tenant",
+          "method": "GET",
+          "path": "/api/v1/notifications/deliveries",
+          "endpoint": "app.notifications.api.manage_preferences:list_notification_deliveries"
+        },
+        {
+          "application": "tenant",
+          "method": "GET",
+          "path": "/api/v1/notifications/settings",
+          "endpoint": "app.notifications.api.manage_preferences:get_notification_settings"
+        },
+        {
+          "application": "tenant",
           "method": "POST",
           "path": "/api/v1/auth/sso/access-requests/{user_id}/reject",
           "endpoint": "app.identity.api.auth:reject_sso_access_request"
@@ -1465,9 +1483,21 @@
         },
         {
           "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/notifications/deliveries/{delivery_id}/retry",
+          "endpoint": "app.notifications.api.manage_preferences:retry_notification_delivery"
+        },
+        {
+          "application": "tenant",
           "method": "PUT",
           "path": "/api/v1/auth/sso/connection",
           "endpoint": "app.identity.api.auth:put_sso_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/notifications/settings",
+          "endpoint": "app.notifications.api.manage_preferences:update_notification_settings"
         }
       ]
     },
@@ -3699,6 +3729,36 @@
           "method": "POST",
           "path": "/api/v1/management-action-plans/{plan_id}/submit",
           "endpoint": "app.stress.api.manage_management_actions:submit_management_action_plan"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/regulatory-reporting/regulator-queries/{number}/acknowledgement",
+          "endpoint": "app.reporting.api.manage_regulatory_reporting:acknowledge_regulator_query"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/regulatory-reporting/regulator-queries/{number}/correction",
+          "endpoint": "app.reporting.api.manage_regulatory_reporting:start_regulator_requested_correction"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/regulatory-reporting/regulator-queries/{number}/responses",
+          "endpoint": "app.reporting.api.manage_regulatory_reporting:respond_to_regulator_query"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/regulatory-reporting/reporting-gateway/connection-test",
+          "endpoint": "app.reporting.api.manage_regulatory_reporting:test_reporting_gateway_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/regulatory-reporting/filing-profile",
+          "endpoint": "app.reporting.api.manage_regulatory_reporting:put_filing_profile"
         }
       ]
     },
@@ -4811,6 +4871,12 @@
         {
           "application": "tenant",
           "method": "GET",
+          "path": "/api/v1/notifications/preferences",
+          "endpoint": "app.notifications.api.manage_preferences:get_notification_preferences"
+        },
+        {
+          "application": "tenant",
+          "method": "GET",
           "path": "/api/v1/organization/institutions/access-request",
           "endpoint": "app.identity.api.manage_authorization:list_access_request_institutions"
         },
@@ -5751,6 +5817,24 @@
         {
           "application": "tenant",
           "method": "GET",
+          "path": "/api/v1/banks/{bank_id}/regulatory-reporting/filing-profile",
+          "endpoint": "app.reporting.api.manage_regulatory_reporting:get_filing_profile"
+        },
+        {
+          "application": "tenant",
+          "method": "GET",
+          "path": "/api/v1/banks/{bank_id}/regulatory-reporting/regulator-queries",
+          "endpoint": "app.reporting.api.manage_regulatory_reporting:list_regulator_queries"
+        },
+        {
+          "application": "tenant",
+          "method": "GET",
+          "path": "/api/v1/banks/{bank_id}/regulatory-reporting/reporting-gateway",
+          "endpoint": "app.reporting.api.manage_regulatory_reporting:get_reporting_gateway_status"
+        },
+        {
+          "application": "tenant",
+          "method": "GET",
           "path": "/api/v1/banks/{bank_id}/regulatory-reporting/settings",
           "endpoint": "app.reporting.api.manage_regulatory_reporting:get_reporting_settings"
         },
@@ -6440,6 +6524,120 @@
         "app/data_engine/api/ingest_data.py:require_configure_access"
       ],
       "authentication": "tenant"
+    },
+    {
+      "name": "operator-dependencies-312aca0adb2a",
+      "kind": "dependency",
+      "basis": "Existing operator authentication boundary and exact registered dependency calls listed here. Named scoped/legacy gates remain unchanged; handler and service checks can narrow this access further. Presence is not policy correctness.",
+      "references": [
+        "app/operator/api/reporting_gateway.py:get_reporting_gateway_transport",
+        "app/operator/deps.py:get_operator_context",
+        "app/operator/deps.py:get_operator_db_session",
+        "app/operator/deps.py:require_operator_admin"
+      ],
+      "authentication": "operator",
+      "dependencies": [
+        "app.operator.api.reporting_gateway:get_reporting_gateway_transport",
+        "app.operator.deps:get_operator_context",
+        "app.operator.deps:get_operator_db_session",
+        "app.operator.deps:require_operator_admin",
+        "fastapi.security.http:HTTPBearer"
+      ],
+      "routes": [
+        {
+          "application": "operator",
+          "method": "GET",
+          "path": "/operator/v1/reporting-gateway/institutions",
+          "endpoint": "app.operator.api.reporting_gateway_institutions:list_reporting_gateway_institutions"
+        },
+        {
+          "application": "operator",
+          "method": "GET",
+          "path": "/operator/v1/reporting-gateway/institutions/{code}",
+          "endpoint": "app.operator.api.reporting_gateway_institutions:get_reporting_gateway_institution"
+        },
+        {
+          "application": "operator",
+          "method": "POST",
+          "path": "/operator/v1/reporting-gateway/institutions",
+          "endpoint": "app.operator.api.reporting_gateway_institutions:enrol_reporting_gateway_institution"
+        },
+        {
+          "application": "operator",
+          "method": "POST",
+          "path": "/operator/v1/reporting-gateway/institutions/{code}/clients",
+          "endpoint": "app.operator.api.reporting_gateway_institutions:issue_reporting_gateway_client"
+        },
+        {
+          "application": "operator",
+          "method": "POST",
+          "path": "/operator/v1/reporting-gateway/institutions/{code}/clients/{client_id}/revoke",
+          "endpoint": "app.operator.api.reporting_gateway_institutions:revoke_reporting_gateway_client"
+        },
+        {
+          "application": "operator",
+          "method": "POST",
+          "path": "/operator/v1/reporting-gateway/institutions/{code}/signing-keys",
+          "endpoint": "app.operator.api.reporting_gateway_institutions:register_reporting_gateway_signing_key"
+        },
+        {
+          "application": "operator",
+          "method": "POST",
+          "path": "/operator/v1/reporting-gateway/institutions/{code}/signing-keys/{kid}/retire",
+          "endpoint": "app.operator.api.reporting_gateway_institutions:retire_reporting_gateway_signing_key"
+        },
+        {
+          "application": "operator",
+          "method": "POST",
+          "path": "/operator/v1/reporting-gateway/institutions/{code}/status",
+          "endpoint": "app.operator.api.reporting_gateway_institutions:change_reporting_gateway_institution_status"
+        },
+        {
+          "application": "operator",
+          "method": "POST",
+          "path": "/operator/v1/tenants/{org_id}/banks/{bank_id}/reporting-gateway/certificate-renewal",
+          "endpoint": "app.operator.api.reporting_gateway:renew_reporting_gateway_certificate"
+        },
+        {
+          "application": "operator",
+          "method": "POST",
+          "path": "/operator/v1/tenants/{org_id}/banks/{bank_id}/reporting-gateway/certificate-renewal/cancel",
+          "endpoint": "app.operator.api.reporting_gateway:cancel_reporting_gateway_certificate_renewal"
+        },
+        {
+          "application": "operator",
+          "method": "POST",
+          "path": "/operator/v1/tenants/{org_id}/banks/{bank_id}/reporting-gateway/enrolment",
+          "endpoint": "app.operator.api.reporting_gateway:enrol_bank_on_reporting_gateway"
+        }
+      ]
+    },
+    {
+      "name": "tenant-dependencies-4522a82d1c78",
+      "kind": "dependency",
+      "basis": "Existing tenant authentication boundary and exact registered dependency calls listed here. Named scoped/legacy gates remain unchanged; handler and service checks can narrow this access further. Presence is not policy correctness.",
+      "references": [
+        "app/api/deps.py:get_current_principal",
+        "app/api/deps.py:get_scoped_mutation_tenant_context",
+        "app/api/deps.py:get_tenant_context",
+        "app/api/deps.py:get_tenant_db_session"
+      ],
+      "authentication": "tenant",
+      "dependencies": [
+        "app.api.deps:get_current_principal",
+        "app.api.deps:get_scoped_mutation_tenant_context",
+        "app.api.deps:get_tenant_context",
+        "app.api.deps:get_tenant_db_session",
+        "fastapi.security.http:HTTPBearer"
+      ],
+      "routes": [
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/notifications/preferences",
+          "endpoint": "app.notifications.api.manage_preferences:update_notification_preferences"
+        }
+      ]
     }
   ]
 }

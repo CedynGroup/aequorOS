@@ -22,6 +22,7 @@
  */
 
 import { useState } from "react";
+import Link from "next/link";
 import { Download, Loader2, RefreshCw } from "lucide-react";
 import type {
   PackageChainRead,
@@ -58,10 +59,52 @@ function stepIndexFor(
   hasReference: boolean,
 ): number {
   if (latestPollStatus === "acknowledged") return 3;
-  if (latestPollStatus === "rejected" || latestPollStatus === "declined") return 3;
+  if (latestPollStatus === "rejected" || latestPollStatus === "declined")
+    return 3;
   if (latestPollStatus === "pending") return 2;
   return hasReference ? 1 : 0;
 }
+
+const REGULATOR_DECISIONS = new Set(["acknowledged", "rejected", "declined"]);
+
+/**
+ * Where the regulator has the return, read from the submission record.
+ *
+ * A decision is its own event (`acknowledged` / `rejected` / `declined`), written
+ * beside the `status_poll` that found it, so it is read first. Short of one, the
+ * latest poll's outcome is what the server stored under `detail.result`
+ * (`workflow.check_regulator_status`). This used to read `detail.poll_status`, a
+ * key the server never writes, so the timeline stopped at "Received" whatever
+ * the regulator had decided.
+ */
+export function regulatorStanding(events: readonly SubmissionEventRead[]): string | null {
+  const latest = [...events].reverse();
+  const decision = latest.find((event) => REGULATOR_DECISIONS.has(event.event));
+  if (decision) return decision.event;
+  const result = latest.find((event) => event.event === "status_poll")?.detail?.["result"];
+  return typeof result === "string" ? result : null;
+}
+
+/** What the screen says about where the regulator has the return. */
+function standingSentence(pollStatus: string | null): string {
+  switch (pollStatus) {
+    case "acknowledged":
+      return `${centralBankName()} has accepted this return. The obligation for this reporting date is discharged.`;
+    case "rejected":
+      return `${centralBankName()} sent this return back for correction. Record a correction and file the corrected version; the deadline does not move.`;
+    case "declined":
+      return `${centralBankName()} declined this return: it was not accepted for filing.`;
+    default:
+      return `${centralBankName()} has the return and has not yet decided. AequorOS checks for a decision automatically and emails everyone who worked on this return when it arrives — or press Check ${regShort()} status to check now.`;
+  }
+}
+
+/** An open request from the regulator for a corrected filing of this receipt. */
+export type RegulatorCorrectionRequest = Readonly<{
+  number: string;
+  dueAt: Date | null;
+  body: string;
+}>;
 
 export default function FiledRecord({
   pkg,
@@ -73,7 +116,8 @@ export default function FiledRecord({
   checkError,
   lastCheckedLabel,
   onDownloadReceipt,
-  onRequestResubmission,
+  correctionHref,
+  regulatorRequests = [],
 }: {
   pkg: RegulatoryPackageSummaryRead;
   events: readonly SubmissionEventRead[];
@@ -85,25 +129,29 @@ export default function FiledRecord({
   checkError: unknown;
   lastCheckedLabel: string | null;
   onDownloadReceipt: (() => void) | null;
-  onRequestResubmission: (() => void) | null;
+  /** Where this return's corrections are recorded (the Returns workspace). */
+  correctionHref: string | null;
+  /** The regulator's open requests for a corrected filing of this receipt. */
+  regulatorRequests?: readonly RegulatorCorrectionRequest[];
 }) {
   const [showAllFiles, setShowAllFiles] = useState(true);
 
   const submitted = [...events]
     .reverse()
     .find((event) => event.event === "submitted");
-  const latestPoll = [...events]
-    .reverse()
-    .find((event) => event.event === "status_poll");
-  const pollStatus =
-    typeof latestPoll?.detail?.["poll_status"] === "string"
-      ? (latestPoll.detail["poll_status"] as string)
-      : null;
+  const pollStatus = regulatorStanding(events);
+  const awaitingDecision =
+    pkg.status === "submitted" && !REGULATOR_DECISIONS.has(pollStatus ?? "");
 
   // The evidence, read from the submission record itself.
   const files = filedArtifacts(submitted?.detail);
   const step = stepIndexFor(pollStatus, Boolean(submitted?.externalRef));
-  const portal = submissionPortal() ?? `${regShort()}'s portal`;
+  // The gateway is named for what it is; a portal name from the jurisdiction's
+  // profile describes the regulator's own system, not this channel.
+  const viaGateway = submitted?.channel === "reporting_gateway";
+  const portal = viaGateway
+    ? CHANNEL_LABELS.reporting_gateway
+    : (submissionPortal() ?? `${regShort()}'s portal`);
 
   return (
     <div className="space-y-4">
@@ -130,20 +178,25 @@ export default function FiledRecord({
                 Download receipt
               </button>
             )}
-            <button
-              type="button"
-              data-testid="check-regulator-status"
-              disabled={checking}
-              onClick={onCheckStatus}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-            >
-              {checking ? (
-                <Loader2 size={13} className="animate-spin" aria-hidden />
-              ) : (
-                <RefreshCw size={13} aria-hidden />
-              )}
-              Check {regShort()} status
-            </button>
+            {/* Only a filed return still awaiting the regulator has anything
+                to check: the server refuses a poll once a decision is
+                recorded, so the control is not offered after one. */}
+            {awaitingDecision && (
+              <button
+                type="button"
+                data-testid="check-regulator-status"
+                disabled={checking}
+                onClick={onCheckStatus}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+              >
+                {checking ? (
+                  <Loader2 size={13} className="animate-spin" aria-hidden />
+                ) : (
+                  <RefreshCw size={13} aria-hidden />
+                )}
+                Check {regShort()} status
+              </button>
+            )}
           </div>
         }
       >
@@ -151,9 +204,34 @@ export default function FiledRecord({
             discharges no obligation and reached no regulator. */}
         {pkg.isRehearsal && <RehearsalNotice />}
 
+        {regulatorRequests.map((request) => (
+          <div
+            key={request.number}
+            role="note"
+            className="mb-4 rounded-md border border-warning/30 bg-warning-light px-4 py-3"
+          >
+            <p className="text-caption font-medium text-navy">
+              {centralBankName()} asked for a corrected filing ({request.number})
+              {request.dueAt ? `, due ${fmtDateUTC(request.dueAt)}` : ""}.
+            </p>
+            {request.body ? (
+              <p className="mt-1 whitespace-pre-wrap text-caption text-navy">“{request.body}”</p>
+            ) : null}
+            <Link
+              href={`/submissions/queries?q=${encodeURIComponent(request.number)}`}
+              className="mt-2 inline-block text-caption font-medium text-action hover:underline"
+            >
+              Start the correction
+            </Link>
+          </div>
+        ))}
+
         <div className="grid gap-4 md:grid-cols-2">
           <dl className="space-y-2 text-caption">
-            <Row label={`${portal} reference`} mono>
+            <Row
+              label={viaGateway ? "Gateway receipt" : `${portal} reference`}
+              mono
+            >
               {submitted?.externalRef ?? "Not returned"}
             </Row>
             <Row label="Transmitted" mono>
@@ -201,15 +279,17 @@ export default function FiledRecord({
             <p className="mt-2 rounded-sm border border-border-light bg-surface px-3 py-2 text-caption leading-relaxed text-navy/85">
               {/* No background poller exists. A timeline that advanced on its
                   own would be fiction, so the screen says who has to ask. */}
-              {pollStatus === "acknowledged"
-                ? `${centralBankName()} has accepted this return. The obligation for this reporting date is discharged.`
-                : `${centralBankName()} has the return and has not yet decided. Status does not arrive on its own — press Check ${regShort()} status to pull it.`}
+              {standingSentence(pollStatus)}
             </p>
             {checkError ? (
               <div className="mt-2">
                 <ErrorPanel
                   error={checkError}
-                  title={`Could not reach ${portal} for a decision`}
+                  title={
+                    viaGateway
+                      ? `Could not get a decision from the ${portal}`
+                      : `Could not reach ${portal} for a decision`
+                  }
                 />
               </div>
             ) : null}
@@ -269,9 +349,7 @@ export default function FiledRecord({
                     className={`py-2 pr-3 ${
                       file.role === "signed_record"
                         ? "text-positive"
-                        : file.role === "formula_copy"
-                          ? "text-warning"
-                          : "text-slate"
+                        : "text-slate"
                     }`}
                   >
                     {FILED_ROLE_LABEL[file.role]}
@@ -347,17 +425,17 @@ export default function FiledRecord({
               filing at all. Different from rejected, and handled differently.
             </li>
           </ul>
-          {onRequestResubmission && (
+          {correctionHref && (
             <p className="mt-3 border-t border-border-light pt-3 text-caption text-slate">
-              To change a return after it is filed you must ask {regShort()} for
-              a resubmission.{" "}
-              <button
-                type="button"
-                onClick={onRequestResubmission}
+              {viaGateway
+                ? "To change a return after it is filed, record a correction. The corrected version goes to the gateway as an amendment that says why."
+                : `To change a return after it is filed you must ask ${regShort()} for a resubmission.`}{" "}
+              <Link
+                href={correctionHref}
                 className="font-medium text-action hover:underline"
               >
-                Request resubmission
-              </button>
+                {viaGateway ? "Record a correction" : "Request resubmission"}
+              </Link>
             </p>
           )}
         </SectionCard>

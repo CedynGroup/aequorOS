@@ -82,6 +82,7 @@ from app.models import (
     MarketDataConnection,
     MarketDataOverlay,
     Notification,
+    NotificationDelivery,
     Outlet,
     ReconciliationException,
     RegulatoryArtifactVersion,
@@ -1004,6 +1005,25 @@ def _notification(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> 
     )
 
 
+def _notification_delivery(session: Session, tenant: TenantSeed, objects: ObjectSet) -> str:
+    """A dead email delivery of this tenant's notification (the retry route's target)."""
+    return _uuid(
+        session,
+        NotificationDelivery(
+            organization_id=tenant.organization_id,
+            notification_id=UUID(objects["notification"]),
+            recipient_user_id=tenant.actor_id,
+            channel="email",
+            address=f"{tenant.slug}@object-reference.test",
+            mode="immediate",
+            status="dead",
+            attempts=1,
+            next_attempt_at=_NOW,
+            last_error=tenant.marker,
+        ),
+    )
+
+
 def _job(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
     return _uuid(
         session,
@@ -1795,6 +1815,12 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
         bank_scoped=False,
     ),
     ObjectKind(
+        "notification_delivery",
+        _notification_delivery,
+        ("/api/v1/notifications/deliveries/{delivery_id}",),
+        bank_scoped=False,
+    ),
+    ObjectKind(
         "job",
         _job,
         (
@@ -1980,6 +2006,7 @@ MODEL_BY_KIND: Final[Mapping[str, type]] = {
     "assessment": RiskAssessment,
     "assessment_run": RiskAssessmentRun,
     "notification": Notification,
+    "notification_delivery": NotificationDelivery,
     "job": Job,
     "integration_key": IntegrationKey,
     "binding": AuthorizationBinding,

@@ -1,0 +1,76 @@
+# AequorOS Reporting Gateway — the API's public host, with mutual TLS.
+#
+# Install as a Traefik dynamic configuration on the Coolify server (Servers → Proxy →
+# Dynamic Configurations, file name srg-gateway.yaml). Before installing, replace
+# BOTH occurrences of gateway.example.com with the gateway's public host — the host
+# GATEWAY_BASE_URL names. Coolify's proxy mounts /data/coolify/proxy at /traefik;
+# the client CA file below is copied there in deploy/README.md, step 4.
+#
+# What it does:
+#   · terminates TLS for the gateway host and asks every client for a certificate.
+#     A certificate that is presented must chain to the gateway's CA or the
+#     handshake fails. One that is not presented is allowed through, because
+#     supervisors' browsers sign in on this host at /idp; the API itself refuses
+#     every institution and operator call that arrives without one.
+#   · removes any X-Forwarded-Tls-Client-Cert the client sent, then forwards the
+#     verified certificate in it. The API trusts that header only from
+#     GATEWAY_TRUSTED_PROXIES (this proxy).
+#   · routes to the srg-gateway-api service over the application's network.
+
+http:
+  routers:
+    srg-gateway-api:
+      rule: "Host(`gateway.example.com`)"
+      entryPoints:
+        - https
+      priority: 1000
+      service: srg-gateway-api
+      middlewares:
+        - srg-gateway-strip-client-cert
+        - srg-gateway-client-cert
+        - srg-gateway-hsts
+      tls:
+        certResolver: letsencrypt
+        options: srg-gateway-mtls
+    srg-gateway-api-http:
+      rule: "Host(`gateway.example.com`)"
+      entryPoints:
+        - http
+      priority: 1000
+      service: srg-gateway-api
+      middlewares:
+        - srg-gateway-https
+
+  services:
+    srg-gateway-api:
+      loadBalancer:
+        servers:
+          - url: "http://srg-gateway-api:8200"
+
+  middlewares:
+    srg-gateway-strip-client-cert:
+      headers:
+        customRequestHeaders:
+          X-Forwarded-Tls-Client-Cert: ""
+    srg-gateway-client-cert:
+      passTLSClientCert:
+        pem: true
+    srg-gateway-hsts:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        forceSTSHeader: true
+    srg-gateway-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+tls:
+  options:
+    srg-gateway-mtls:
+      minVersion: VersionTLS12
+      sniStrict: true
+      clientAuth:
+        caFiles:
+          - /traefik/srg-gateway-ca.pem
+        clientAuthType: VerifyClientCertIfGiven

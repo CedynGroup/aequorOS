@@ -1,0 +1,569 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD14",
+ "name": "Interest Rate (Interest & Lending Rates)",
+ "cadence": "weekly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd14-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD14 REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_interest_lending_rates",
+   "title": "INTEREST&LENDING-RATES",
+   "unit": "percent",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD14.BASE_RATE.R9.base_rate",
+     "label": "BASE RATE:",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.TENOR_HEADER.R14.td_1",
+     "label": "Deposit — td 1",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.TENOR_HEADER.R14.td_2",
+     "label": "Deposit — td 2",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.TENOR_HEADER.R14.td_3",
+     "label": "Deposit — td 3",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.TENOR_HEADER.R14.td_6",
+     "label": "Deposit — td 6",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.TENOR_HEADER.R14.td_12",
+     "label": "Deposit — td 12",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.TENOR_HEADER.R14.td_24",
+     "label": "Deposit — td 24",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.TENOR_HEADER.R14.td_36",
+     "label": "Deposit — td 36",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.demand",
+     "label": "Cedis — demand",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.savings",
+     "label": "Cedis — savings",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.td_1",
+     "label": "Cedis — td 1",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.td_2",
+     "label": "Cedis — td 2",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.td_3",
+     "label": "Cedis — td 3",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.td_6",
+     "label": "Cedis — td 6",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.td_12",
+     "label": "Cedis — td 12",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.td_24",
+     "label": "Cedis — td 24",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.td_36",
+     "label": "Cedis — td 36",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.cd",
+     "label": "Cedis — cd",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.call",
+     "label": "Cedis — call",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.other_deposit",
+     "label": "Cedis — other deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.agriculture",
+     "label": "Cedis — agriculture",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.exports",
+     "label": "Cedis — exports",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.mining",
+     "label": "Cedis — mining",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.manufacturing",
+     "label": "Cedis — manufacturing",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.construction",
+     "label": "Cedis — construction",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.imports",
+     "label": "Cedis — imports",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.commerce",
+     "label": "Cedis — commerce",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R17.others",
+     "label": "Cedis — others",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.demand",
+     "label": "USD — demand",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.savings",
+     "label": "USD — savings",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.td_1",
+     "label": "USD — td 1",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.td_2",
+     "label": "USD — td 2",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.td_3",
+     "label": "USD — td 3",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.td_6",
+     "label": "USD — td 6",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.td_12",
+     "label": "USD — td 12",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.td_24",
+     "label": "USD — td 24",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.td_36",
+     "label": "USD — td 36",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.cd",
+     "label": "USD — cd",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.call",
+     "label": "USD — call",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.other_deposit",
+     "label": "USD — other deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.agriculture",
+     "label": "USD — agriculture",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.exports",
+     "label": "USD — exports",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.mining",
+     "label": "USD — mining",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.manufacturing",
+     "label": "USD — manufacturing",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.construction",
+     "label": "USD — construction",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.imports",
+     "label": "USD — imports",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.commerce",
+     "label": "USD — commerce",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R28.others",
+     "label": "USD — others",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.demand",
+     "label": "GBP — demand",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.savings",
+     "label": "GBP — savings",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.td_1",
+     "label": "GBP — td 1",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.td_2",
+     "label": "GBP — td 2",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.td_3",
+     "label": "GBP — td 3",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.td_6",
+     "label": "GBP — td 6",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.td_12",
+     "label": "GBP — td 12",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.td_24",
+     "label": "GBP — td 24",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.td_36",
+     "label": "GBP — td 36",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.cd",
+     "label": "GBP — cd",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.call",
+     "label": "GBP — call",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.other_deposit",
+     "label": "GBP — other deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.agriculture",
+     "label": "GBP — agriculture",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.exports",
+     "label": "GBP — exports",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.mining",
+     "label": "GBP — mining",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.manufacturing",
+     "label": "GBP — manufacturing",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.construction",
+     "label": "GBP — construction",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.imports",
+     "label": "GBP — imports",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.commerce",
+     "label": "GBP — commerce",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R29.others",
+     "label": "GBP — others",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.demand",
+     "label": "DEM — demand",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.savings",
+     "label": "DEM — savings",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.td_1",
+     "label": "DEM — td 1",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.td_2",
+     "label": "DEM — td 2",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.td_3",
+     "label": "DEM — td 3",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.td_6",
+     "label": "DEM — td 6",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.td_12",
+     "label": "DEM — td 12",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.td_24",
+     "label": "DEM — td 24",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.td_36",
+     "label": "DEM — td 36",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.cd",
+     "label": "DEM — cd",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.call",
+     "label": "DEM — call",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.other_deposit",
+     "label": "DEM — other deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.agriculture",
+     "label": "DEM — agriculture",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.exports",
+     "label": "DEM — exports",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.mining",
+     "label": "DEM — mining",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.manufacturing",
+     "label": "DEM — manufacturing",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.construction",
+     "label": "DEM — construction",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.imports",
+     "label": "DEM — imports",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.commerce",
+     "label": "DEM — commerce",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R30.others",
+     "label": "DEM — others",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.demand",
+     "label": "All other Currencies — demand",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.savings",
+     "label": "All other Currencies — savings",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.td_1",
+     "label": "All other Currencies — td 1",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.td_2",
+     "label": "All other Currencies — td 2",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.td_3",
+     "label": "All other Currencies — td 3",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.td_6",
+     "label": "All other Currencies — td 6",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.td_12",
+     "label": "All other Currencies — td 12",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.td_24",
+     "label": "All other Currencies — td 24",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.td_36",
+     "label": "All other Currencies — td 36",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.cd",
+     "label": "All other Currencies — cd",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.call",
+     "label": "All other Currencies — call",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.other_deposit",
+     "label": "All other Currencies — other deposit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.agriculture",
+     "label": "All other Currencies — agriculture",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.exports",
+     "label": "All other Currencies — exports",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.mining",
+     "label": "All other Currencies — mining",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.manufacturing",
+     "label": "All other Currencies — manufacturing",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.construction",
+     "label": "All other Currencies — construction",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.imports",
+     "label": "All other Currencies — imports",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.commerce",
+     "label": "All other Currencies — commerce",
+     "kind": "value"
+    },
+    {
+     "code": "BSD14.RATE.R31.others",
+     "label": "All other Currencies — others",
+     "kind": "value"
+    }
+   ]
+  }
+ ],
+ "rules": []
+}

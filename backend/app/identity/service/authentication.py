@@ -53,7 +53,7 @@ from app.identity.models.bank import Bank
 from app.identity.models.refresh_token import RefreshToken
 from app.identity.models.sso_connection import SsoConnection
 from app.identity.models.user import User
-from app.identity.service import auth_throttle, sso_config
+from app.identity.service import auth_throttle, pre_tenant, sso_config
 from app.models.audit_event import AuditEvent
 
 _INVALID = HTTPException(
@@ -267,11 +267,21 @@ def deactivate_user(db: Session, user: User, *, commit: bool = True) -> None:
 
 
 def _resolve_user(db: Session, email: str, organization_id: str | None) -> User | None:
-    stmt = select(User).where(User.email == email, User.is_active.is_(True))
+    # Sign-in has no tenant yet; learn which one the email belongs to, then read the
+    # account inside it under ordinary RLS (see :mod:`pre_tenant`).
+    organizations = pre_tenant.login_organizations(db, email)
     if organization_id is not None:
-        stmt = stmt.where(User.organization_id == organization_id)
-    users = db.scalars(stmt).all()
+        organizations = [match for match in organizations if match == organization_id]
     # Exactly-one match logs in; an email shared across orgs must be disambiguated.
+    if len(organizations) != 1:
+        return None
+    pre_tenant.enter_organization(db, organizations[0])
+    stmt = select(User).where(
+        User.email == email,
+        User.is_active.is_(True),
+        User.organization_id == organizations[0],
+    )
+    users = db.scalars(stmt).all()
     return users[0] if len(users) == 1 else None
 
 
@@ -317,19 +327,30 @@ def record_authentication_event(
     occurred_at = utc_now()
     for bank_id in bank_ids:
         for action in actions:
+            details: dict[str, JsonValue] = {
+                **evidence,
+                "attempt_id": str(attempt_id),
+                **({"bank_id": bank_id} if bank_id is not None else {}),
+            }
+            if user is None:
+                # No account matched, so there is no tenant to attribute it to.
+                pre_tenant.record_unattributed_failure(
+                    db,
+                    event_type=action,
+                    attempt_id=attempt_id,
+                    details=details,
+                    occurred_at=occurred_at,
+                )
+                continue
             db.add(
                 AuditEvent(
-                    organization_id=user.organization_id if user is not None else None,
-                    actor_user_id=user.id if user is not None else None,
+                    organization_id=user.organization_id,
+                    actor_user_id=user.id,
                     event_type=action,
-                    entity_type="user" if user is not None else "authentication_attempt",
-                    entity_id=str(user.id if user is not None else attempt_id),
+                    entity_type="user",
+                    entity_id=str(user.id),
                     created_at=occurred_at,
-                    details={
-                        **evidence,
-                        "attempt_id": str(attempt_id),
-                        **({"bank_id": bank_id} if bank_id is not None else {}),
-                    },
+                    details=details,
                 )
             )
 
@@ -459,6 +480,13 @@ def _record_sso_access_request(
     db.commit()
 
 
+def _route_sso_connection(db: Session, hints: dict[str, object]) -> SsoConnection | None:
+    """Enter the tenant the unverified hints route to, then read its connection there."""
+    issuer, audience = str(hints.get("iss", "")), hints.get("aud", "")
+    pre_tenant.enter_sso_organization(db, issuer=issuer, audience=audience)
+    return sso_config.find_enabled_by_issuer_audience(db, issuer=issuer, audience=audience)
+
+
 def login_with_sso(
     db: Session,
     *,
@@ -484,11 +512,7 @@ def login_with_sso(
         except security.AuthError as exc:
             raise _SSO_INVALID from exc
 
-        connection = sso_config.find_enabled_by_issuer_audience(
-            db,
-            issuer=str(hints.get("iss", "")),
-            audience=hints.get("aud", ""),
-        )
+        connection = _route_sso_connection(db, hints)
         if connection is None:
             raise _SSO_INVALID
 
@@ -636,6 +660,16 @@ def _claimed_token_id(claims: dict[str, object]) -> UUID | None:
     return _claimed_uuid(claims, "jti")
 
 
+def _enter_token_organization(db: Session, claims: dict[str, object]) -> None:
+    """Scope a pre-sign-in session to a verified refresh token's tenant.
+
+    A token without an ``org`` claim enters nothing and fails the later checks.
+    """
+    organization = claims.get("org")
+    if isinstance(organization, str) and organization:
+        pre_tenant.enter_organization(db, organization)
+
+
 def _claimed_subject(claims: dict[str, object]) -> UUID | None:
     """The user the token claims to belong to.
 
@@ -684,6 +718,8 @@ def refresh_tokens(
     token_id = _claimed_token_id(claims)
     if token_id is None:
         raise _INVALID_REFRESH
+    # The signature is verified, so the token's own tenant scopes every read below.
+    _enter_token_organization(db, claims)
 
     # users BEFORE refresh_tokens, always — this is the lock order the revoking
     # paths take, and taking it here (rather than inside `issue_tokens`, which
@@ -773,6 +809,7 @@ def logout(db: Session, *, refresh_token: str, settings: AuthSettings | None = N
     token_id = _claimed_token_id(claims)
     if token_id is None:
         return
+    _enter_token_organization(db, claims)
     record = db.scalar(select(RefreshToken).where(RefreshToken.id == token_id))
     if record is None or not hmac.compare_digest(
         record.token_hash, _hash_refresh_token(refresh_token)

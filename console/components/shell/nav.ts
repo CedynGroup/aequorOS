@@ -7,6 +7,7 @@ import {
   History,
   LayoutDashboard,
   LineChart,
+  RadioTower,
   Scale,
   ScrollText,
   SearchCheck,
@@ -55,6 +56,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: '/tenants', label: 'Tenants', icon: Building2, keywords: 'banks orgs institutions BK OR' },
       { href: '/onboard', label: 'Onboard', icon: UserPlus, keywords: 'provision new tenant saga create bank' },
       { href: '/operations', label: 'Operations', icon: Activity, keywords: 'data engines connections jobs' },
+      { href: '/reporting-gateway', label: 'Reporting Gateway', icon: RadioTower, keywords: 'gateway institutions enrol filing clients certificates signature keys regulator' },
     ],
   },
   {
