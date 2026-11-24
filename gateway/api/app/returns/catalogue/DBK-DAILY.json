@@ -30,7 +30,7 @@
     },
     {
      "key": "net_ccy",
-     "label": "Net Position (FCY '000)",
+     "label": "Net Position (FCY)",
      "kind": "number",
      "unit": "units"
     },

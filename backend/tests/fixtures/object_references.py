@@ -2006,6 +2006,7 @@ MODEL_BY_KIND: Final[Mapping[str, type]] = {
     "assessment": RiskAssessment,
     "assessment_run": RiskAssessmentRun,
     "notification": Notification,
+    "notification_delivery": NotificationDelivery,
     "job": Job,
     "integration_key": IntegrationKey,
     "binding": AuthorizationBinding,

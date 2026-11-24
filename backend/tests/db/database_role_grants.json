@@ -831,6 +831,22 @@
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
+    "notification_deliveries": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "notification_policies": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "notification_preferences": {
+      "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "notification_settings": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
     "notifications": {
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]

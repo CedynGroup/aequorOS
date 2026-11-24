@@ -93,9 +93,17 @@ const SUPPRESSION_REASONS: Record<string, string> = {
  * dispatcher records; relay errors arrive as "SMTPRecipientsRefused: …" and
  * are summarised, keeping the relay's own words for the administrator.
  */
+/**
+ * A free-text key's own entry. A plain lookup on server text would also find
+ * inherited names: `"toString"` returned Object.prototype.toString.
+ */
+function ownEntry(map: Record<string, string>, key: string): string | undefined {
+  return Object.prototype.hasOwnProperty.call(map, key) ? map[key] : undefined;
+}
+
 export function deliveryReason(lastError: string | null | undefined): string | null {
   if (!lastError) return null;
-  const known = SUPPRESSION_REASONS[lastError];
+  const known = ownEntry(SUPPRESSION_REASONS, lastError);
   if (known) return known;
   const [kind, ...rest] = lastError.split(": ");
   const detail = rest.join(": ").trim();
@@ -109,7 +117,7 @@ export function deliveryReason(lastError: string | null | undefined): string | n
     TimeoutError: "The mail server did not answer in time",
     ConnectionRefusedError: "Could not connect to the mail server",
   };
-  const lead = summary[kind];
+  const lead = ownEntry(summary, kind);
   if (lead) return detail ? `${lead} (${detail})` : lead;
   return lastError;
 }

@@ -113,6 +113,14 @@ describe("deliveryReason", () => {
       }),
     );
   });
+
+  it("never reads an inherited name as a known reason", () => {
+    // fast-check found "toString" returning Object.prototype.toString.
+    for (const text of ["toString", "constructor", "__proto__", "hasOwnProperty"]) {
+      expect(deliveryReason(text)).toBe(text);
+      expect(deliveryReason(`${text}: detail`)).toBe(`${text}: detail`);
+    }
+  });
 });
 
 describe("orgSettingsProblem", () => {

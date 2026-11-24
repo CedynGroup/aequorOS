@@ -216,7 +216,8 @@ test.describe("Organization Owner", () => {
         }
         await route.fulfill({ response, json: catalogue });
       });
-      await page.goto("/submissions/settings");
+      // Signing policies have their own settings page; the settings overview links to it.
+      await page.goto("/submissions/settings/signing");
       const selector = page.getByLabel("Return code", { exact: true });
       await expect(selector).toBeVisible();
       await expect(
