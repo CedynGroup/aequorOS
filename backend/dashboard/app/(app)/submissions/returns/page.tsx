@@ -729,6 +729,7 @@ function PackageWorkspace({
   // certification card, so the surface owns which role is signing.
   const [ceremonyRole, setCeremonyRole] = useState<SigningRole | null>(null);
   const [certificationOpen, setCertificationOpen] = useState(false);
+  const [correctionsOpen, setCorrectionsOpen] = useState(false);
 
   // The signature queue deep-links a colleague straight into the ceremony
   // (`?sign=approver`), and the SSO step-up comes back the same way. The
@@ -740,6 +741,8 @@ function PackageWorkspace({
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("sign") ?? params.get("certify")) setCertificationOpen(true);
+    // A filed return's "Record a correction" link lands on its Corrections row.
+    if (params.get("corrections") === "1") setCorrectionsOpen(true);
   }, []);
 
   const status = pkg?.status ?? summary.status;
@@ -799,6 +802,11 @@ function PackageWorkspace({
       ? "The version chain that names the filed document could not be loaded."
       : null;
   const resubmissions = resubmissionsQuery.data?.requests ?? [];
+  // A granted correction not yet used by a corrected version: the preparer's
+  // next act on this filed return is to generate that version.
+  const correctionGranted = resubmissions.some(
+    (entry) => entry.status === "granted" && entry.consumedByPackageId == null,
+  );
   const submissionRevision =
     pkg?.submissionRevision ?? summary.submissionRevision;
   const regulatorComments = pkg?.regulatorComments ?? summary.regulatorComments;
@@ -830,6 +838,7 @@ function PackageWorkspace({
     isRehearsal: summary.isRehearsal === true,
     pendingReupload,
     canPoll,
+    correctionGranted,
     regulatorName: regulatorShortName,
   };
   const action = primaryFilingAction(surfaceInput);
@@ -1245,6 +1254,8 @@ function PackageWorkspace({
         <DisclosureRow
           title="Corrections"
           testId="resubmission-row"
+          open={correctionsOpen}
+          onOpenChange={setCorrectionsOpen}
           summary={
             resubmissions.length === 0
               ? "No correction has been asked for."

@@ -17,6 +17,7 @@
 export const ChannelCode = {
   OrassApi: "orass_api",
   OrassSandbox: "orass_sandbox",
+  ReportingGateway: "reporting_gateway",
   Email: "email",
   Manual: "manual",
 } as const;

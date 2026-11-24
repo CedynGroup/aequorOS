@@ -32,7 +32,7 @@ from app.reporting.schemas.packages import (
     RegulatoryPackageCreate,
     ReportingObligationRead,
 )
-from app.reporting.service import generation, validation, workflow
+from app.reporting.service import filing_notifications, generation, validation, workflow
 from app.reporting.service.registry import REGISTRY
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
@@ -41,6 +41,7 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.support.factories.attestation import relax_signing
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.filing_chain import complete_chain
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
@@ -353,6 +354,16 @@ def _seed_with_baseline_run(db: Session) -> None:
     # for a return that requires signatures, so opt BSD3 out the way an
     # administrator would rather than turn every emission test into a ceremony.
     relax_signing(db, organization_id=DEMO_ORG_ID, return_code="LCR-NSFR")
+    # Stage notices are addressed by authority, not by the scalar role, so the
+    # approver holds the scoped binding a real approver is given in Settings.
+    grant_institution_authority(
+        db,
+        organization_id=DEMO_ORG_ID,
+        bank_id=SAMPLE_BANK_ID,
+        user_id=APPROVER_ID,
+        bundle=RoleBundle.APPROVER,
+    )
+    db.commit()
     period_id = db.scalar(
         select(BankReportingPeriod.id).where(
             BankReportingPeriod.organization_id == DEMO_ORG_ID,
@@ -408,6 +419,16 @@ def _drive_to_submitted(db: Session) -> UUID:
     return package.id
 
 
+def _event_rows(db: Session, event_key: str) -> list[Notification]:
+    return list(
+        db.scalars(
+            select(Notification)
+            .where(Notification.event_key == event_key)
+            .order_by(Notification.id)
+        )
+    )
+
+
 def test_approval_request_and_decision_emit_notifications(db_session: Session) -> None:
     _seed_with_baseline_run(db_session)
     package = _generate(db_session)
@@ -416,11 +437,13 @@ def test_approval_request_and_decision_emit_notifications(db_session: Session) -
         db_session, MAKER, SAMPLE_BANK_ID, package.id, PackageApprovalRequestCreate()
     )
 
-    pending = _notification_rows(db_session, "reporting.package.pending_approval")
+    # Addressed by AUTHORITY: whoever may decide the approval stage now.
+    pending = _event_rows(db_session, "filing.review_requested")
     assert {row.recipient_user_id for row in pending} == {APPROVER_ID}
     assert all(row.severity == "warning" for row in pending)
-    assert all("LCR-NSFR" in row.title and "2026-03-31" in row.title for row in pending)
+    assert all("LCR-NSFR for 31 March 2026" in row.title for row in pending)
     assert all(row.entity_id == str(package.id) for row in pending)
+    assert all(row.action_path and "code=LCR-NSFR" in row.action_path for row in pending)
 
     workflow.decide_approval(
         db_session,
@@ -429,10 +452,10 @@ def test_approval_request_and_decision_emit_notifications(db_session: Session) -
         package.id,
         PackageApprovalDecisionCreate(action="approved"),
     )
-    approved = _notification_rows(db_session, "reporting.package.approved")
+    approved = _event_rows(db_session, "filing.stage_approved")
     assert [row.recipient_user_id for row in approved] == [DEMO_USER_ID]
     assert approved[0].severity == "info"
-    assert "LCR-NSFR" in approved[0].title and "2026-03-31" in approved[0].title
+    assert "LCR-NSFR for 31 March 2026" in approved[0].title
 
 
 def test_approval_rejection_notifies_generator_with_reason(db_session: Session) -> None:
@@ -449,47 +472,51 @@ def test_approval_rejection_notifies_generator_with_reason(db_session: Session) 
         package.id,
         PackageApprovalDecisionCreate(action="rejected", reason="Numbers moved after cutoff."),
     )
-    rejected = _notification_rows(db_session, "reporting.package.approval_rejected")
+    rejected = _event_rows(db_session, "filing.sent_back")
     assert [row.recipient_user_id for row in rejected] == [DEMO_USER_ID]
     assert rejected[0].severity == "warning"
     assert "Numbers moved after cutoff." in rejected[0].body
+    assert rejected[0].data["quote"] == "Numbers moved after cutoff."
 
 
-def test_regulator_decisions_notify_approvers_and_generator(db_session: Session) -> None:
+def test_regulator_decisions_notify_everyone_who_worked_on_the_return(
+    db_session: Session,
+) -> None:
     _seed_with_baseline_run(db_session)
 
     # Cycle 1: rejected (returned for correction) with supervisor comments.
+    # Recorded by the approver, so the approver is not told about their own act.
     package_id = _drive_to_submitted(db_session)
     workflow.record_regulator_decision(
         db_session,
-        MAKER,
+        CHECKER,
         SAMPLE_BANK_ID,
         package_id,
         channel="manual",
         event="rejected",
         detail={"comments": "Fix the Table 2 maturity balances."},
     )
-    rejected = _notification_rows(db_session, "reporting.regulator.rejected")
-    # Approver-class fan-out plus a direct row for the generator, who is not
-    # approver-class here. Account administration is intentionally excluded.
-    assert {row.recipient_user_id for row in rejected} == {APPROVER_ID, DEMO_USER_ID}
+    rejected = _event_rows(db_session, "regulator.sent_back")
+    recipients = {row.recipient_user_id for row in rejected}
+    assert DEMO_USER_ID in recipients
+    assert APPROVER_ID not in recipients
     assert all(row.severity == "warning" for row in rejected)
     assert all("Fix the Table 2 maturity balances." in row.body for row in rejected)
-    assert all("LCR-NSFR" in row.title and "2026-03-31" in row.title for row in rejected)
+    assert all("LCR-NSFR for 31 March 2026" in row.title for row in rejected)
 
     # Cycle 2: declined (final refusal) is critical.
     package_id = _drive_to_submitted(db_session)
     workflow.record_regulator_decision(
         db_session,
-        MAKER,
+        CHECKER,
         SAMPLE_BANK_ID,
         package_id,
         channel="manual",
         event="declined",
         detail={"message": "Return set refused."},
     )
-    declined = _notification_rows(db_session, "reporting.regulator.declined")
-    assert {row.recipient_user_id for row in declined} == {APPROVER_ID, DEMO_USER_ID}
+    declined = _event_rows(db_session, "regulator.declined")
+    assert DEMO_USER_ID in {row.recipient_user_id for row in declined}
     assert all(row.severity == "critical" for row in declined)
     assert all("Return set refused." in row.body for row in declined)
 
@@ -497,15 +524,15 @@ def test_regulator_decisions_notify_approvers_and_generator(db_session: Session)
     package_id = _drive_to_submitted(db_session)
     workflow.record_regulator_decision(
         db_session,
-        MAKER,
+        CHECKER,
         SAMPLE_BANK_ID,
         package_id,
         channel="manual",
         event="acknowledged",
         detail={"note": "Received in good order."},
     )
-    acknowledged = _notification_rows(db_session, "reporting.regulator.acknowledged")
-    assert {row.recipient_user_id for row in acknowledged} == {APPROVER_ID, DEMO_USER_ID}
+    acknowledged = _event_rows(db_session, "regulator.accepted")
+    assert DEMO_USER_ID in {row.recipient_user_id for row in acknowledged}
     assert all(row.severity == "info" for row in acknowledged)
 
 
@@ -636,12 +663,17 @@ def test_an_icaap_package_decision_notification_is_located_on_the_icaap_source_g
     package.return_family = "icaap"
     db_session.commit()
 
-    workflow._notify_decision(  # pyright: ignore[reportPrivateUsage] - the notice's emission unit
-        db_session, MAKER, package, approved=False, reason="Fix the coverage note."
+    filing_notifications.regulator_decided(
+        db_session,
+        CHECKER,
+        package,
+        event="rejected",
+        reference="R-1",
+        detail={"comments": "Fix the coverage note."},
     )
     db_session.commit()
 
-    rows = _notification_rows(db_session, "reporting.package.approval_rejected")
+    rows = _event_rows(db_session, "regulator.sent_back")
     assert len(rows) == 1
     assert rows[0].module == Module.CAPITAL.value
     assert rows[0].sensitivity == Sensitivity.CONFIDENTIAL.value

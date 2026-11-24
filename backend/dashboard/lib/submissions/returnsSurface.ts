@@ -74,6 +74,11 @@ export type SurfaceInput = {
   pendingReupload: boolean;
   /** The channel can be asked for a decision. */
   canPoll: boolean;
+  /**
+   * A correction to this filed return has been granted and no corrected version
+   * has used it yet: generating that version is the preparer's next act.
+   */
+  correctionGranted: boolean;
   /** The regulator's name, for copy. Never a literal in this module. */
   regulatorName: string;
 };
@@ -152,6 +157,18 @@ export function surfaceSections(input: SurfaceInput): SurfaceSection[] {
 }
 
 function preparerAction(input: SurfaceInput): PrimaryAction {
+  if (
+    input.correctionGranted &&
+    (input.status === "submitted" || input.status === "acknowledged")
+  ) {
+    return {
+      kind: "regenerate",
+      label: "Generate the corrected version",
+      caption: `The correction to this filed return is granted. The corrected version is a new version of the return, taken through the chain again before it goes to ${input.regulatorName} — this one is kept unchanged as history.`,
+      enabled: true,
+      reason: null,
+    };
+  }
   if (input.status === "rejected") {
     return {
       kind: "regenerate",
@@ -311,6 +328,14 @@ export function primaryFilingAction(input: SurfaceInput): PrimaryAction | null {
   }
 
   const at = stageForStatus(input.status);
+  // A granted correction puts a filed return back in the preparer's hands.
+  if (
+    input.correctionGranted &&
+    (at === "regulator" || at === "closed") &&
+    held.includes("prepare")
+  ) {
+    return preparerAction(input);
+  }
   if (at !== "closed" && at !== "regulator" && held.includes(at)) {
     return ACTION_FOR[at](input);
   }

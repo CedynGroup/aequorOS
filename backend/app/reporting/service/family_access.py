@@ -568,8 +568,15 @@ def chain_decision_verdict(  # noqa: PLR0913 - the complete decision tuple is ex
     *,
     surface: str,
     conditions: tuple[ConditionCheck, ...] = (),
+    record: bool = True,
 ) -> ChainDecisionVerdict:
     """Does a stored binding authorise this chain decision? Never raises.
+
+    ``record=False`` evaluates without emitting the binding-decision event: the
+    notification platform asks this question of every officer to find who may
+    act on a stage, and twenty "denied" warnings per hand-off would bury the
+    enforcement signal the event exists for. Enforcement call sites keep the
+    default.
 
     Returns a verdict so the caller can explain a visible return's scope miss
     without disclosing a return the principal cannot read.
@@ -613,9 +620,10 @@ def chain_decision_verdict(  # noqa: PLR0913 - the complete decision tuple is ex
             principal, permission, resource, surface=surface, error=exc
         )
         return ChainDecisionVerdict(allowed=False)
-    authorization_service.record_binding_decision(
-        decision, surface=surface, severity="info" if decision.allowed else "warning"
-    )
+    if record:
+        authorization_service.record_binding_decision(
+            decision, surface=surface, severity="info" if decision.allowed else "warning"
+        )
     if decision.allowed:
         return ChainDecisionVerdict(allowed=True)
     return ChainDecisionVerdict(allowed=False, near_miss=_near_miss(decision))

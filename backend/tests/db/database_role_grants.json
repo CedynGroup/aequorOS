@@ -177,6 +177,14 @@
     ["aequoros_signed_package_guard", "", "aqs_bi"],
     ["aequoros_signed_package_guard", "", "aqs_operator"],
     ["aequoros_signed_package_guard", "", "aqs_worker"],
+    ["aqs_auth_enabled_sso_organizations", "", "aqs_api"],
+    ["aqs_auth_login_organizations", "text", "aqs_api"],
+    [
+      "aqs_auth_record_unattributed_failure",
+      "text, uuid, jsonb, timestamp with time zone",
+      "aqs_api"
+    ],
+    ["aqs_auth_sso_organizations", "text, text[]", "aqs_api"],
     ["aqs_behavioral_model_proposal_guard", "", "aqs_api"],
     ["aqs_behavioral_model_proposal_guard", "", "aqs_audit_verifier"],
     ["aqs_behavioral_model_proposal_guard", "", "aqs_bi"],

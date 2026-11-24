@@ -1,7 +1,28 @@
 """Reporting's interface for other features: re-exports only, no logic."""
 
 from app.reporting.models.packages import RegulatoryPackage
-from app.reporting.service import attachments, filing_reconciliation, generation
+from app.reporting.schemas.reporting_gateway import (
+    GatewayCertificateRenewalRequest,
+    GatewayClientIssue,
+    GatewayClientIssued,
+    GatewayClientRevoke,
+    GatewayEnrolmentRead,
+    GatewayEnrolmentRequest,
+    GatewayInstitution,
+    GatewayInstitutionCreate,
+    GatewayInstitutionList,
+    GatewayInstitutionStatusChange,
+    GatewaySigningKeyRegister,
+)
+from app.reporting.service import (
+    attachments,
+    filing_reconciliation,
+    gateway_enrolment,
+    gateway_institutions,
+    gateway_renewal,
+    generation,
+)
+from app.reporting.service.channels.gateway_http import GatewayIdentity
 from app.reporting.service.common import get_snapshot_for_reporting_date
 from app.reporting.service.eligibility import resolve_eligibility
 from app.reporting.service.exports import pdf_parts
@@ -21,10 +42,28 @@ from app.reporting.service.filing_workflow.errors import conflict, not_found, un
 from app.reporting.service.instrument_notifications import scan_instrument_statuses
 from app.reporting.service.registry import REGISTRY
 from app.reporting.service.report_comparison import favorability_for_disposition
+from app.reporting.service.review_reminders import run_filing_review_reminders
+from app.reporting.service.submission_sync import ensure_scheduled as ensure_submission_sync
+from app.reporting.service.submission_sync import run_regulatory_submission_sync
 from app.reporting.service.workflow import granted_unconsumed_resubmission
 
 __all__ = [
+    "ensure_submission_sync",
+    "run_regulatory_submission_sync",
+    "run_filing_review_reminders",
     "FamilyHooks",
+    "GatewayCertificateRenewalRequest",
+    "GatewayClientIssue",
+    "GatewayClientIssued",
+    "GatewayClientRevoke",
+    "GatewayEnrolmentRead",
+    "GatewayEnrolmentRequest",
+    "GatewayIdentity",
+    "GatewayInstitution",
+    "GatewayInstitutionCreate",
+    "GatewayInstitutionList",
+    "GatewayInstitutionStatusChange",
+    "GatewaySigningKeyRegister",
     "NAVY",
     "REGISTRY",
     "resolve_eligibility",
@@ -38,6 +77,9 @@ __all__ = [
     "escape_text",
     "favorability_for_disposition",
     "filing_reconciliation",
+    "gateway_enrolment",
+    "gateway_institutions",
+    "gateway_renewal",
     "generation",
     "get_snapshot_for_reporting_date",
     "granted_unconsumed_resubmission",

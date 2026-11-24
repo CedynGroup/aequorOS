@@ -357,12 +357,12 @@ def export_package_version(
 
     extension = kind
     if kind == "xlsx_working":
-        # Official BSD forms preserve the regulator's own workbook formulas —
-        # since 2026-09-20 that copy is filed WITH the protected values-only
-        # workbook, and is labelled accordingly. SDI packets use a separately
-        # labelled working calculation sheet whose formula plan is explicit and
-        # derived from the sealed snapshot; it is NOT filed, and keeps the
-        # plain working-copy label that says so.
+        # Official BSD forms preserve the regulator's own workbook formulas. Every
+        # other return with a formula workbook (CAR-RWA, FX-NOP, NPL, the SDI
+        # packets) adds a calculation sheet whose formulas recompute the return
+        # from its own report sheets. Since 2026-11-23 every one of them is filed
+        # with the return; a package generated before then keeps the wording it
+        # was generated with (``metadata.formula_workbook``, D-021).
         if is_bog_official_template(definition.template_id):
             payload = render_bog_form_xlsx(
                 definition.code, snapshot, bank, package.generated_at, mode="working"

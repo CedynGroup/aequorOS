@@ -33,8 +33,10 @@ class IndexMigration(Protocol):
     def backfill_indexes(self, connection: Connection) -> None: ...
 
 
+# One row per batch flushes inside the loop; the default leaves a final partial batch.
+@pytest.mark.parametrize("batch", [1, 2_000])
 def test_upgrade_indexes_all_existing_generations_before_using_them(
-    db_session: Session, provider: LocalKeyProvider
+    db_session: Session, provider: LocalKeyProvider, monkeypatch: pytest.MonkeyPatch, batch: int
 ) -> None:
     cp = counterparty(db_session, include_package=False, name=" ＡDA  Traders ")
     bank = db_session.get(Bank, BANK_A)
@@ -72,6 +74,7 @@ def test_upgrade_indexes_all_existing_generations_before_using_them(
     revision = ScriptDirectory.from_config(alembic_config_for_app()).get_revision("202610220101")
     assert revision is not None
     migration = cast(IndexMigration, cast(object, revision.module))
+    monkeypatch.setattr(migration, "BACKFILL_BATCH", batch)
     migration.backfill_indexes(db_session.connection())
     db_session.commit()
     db_session.expunge_all()

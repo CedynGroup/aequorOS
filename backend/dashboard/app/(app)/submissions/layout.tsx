@@ -8,13 +8,14 @@ const tabs = [
   { href: "/submissions/returns", label: "Returns" },
   { href: "/submissions/signatures", label: "Signatures" },
   { href: "/submissions/approvals", label: "Approvals" },
+  { href: "/submissions/queries", label: "Regulator queries" },
   { href: "/submissions/compare", label: "Compare" },
   { href: "/submissions/history", label: "History" },
   { href: "/submissions/instruments", label: "Instruments" },
   { href: "/submissions/upcoming", label: "Upcoming rules" },
   { href: "/submissions/templates", label: "Templates" },
   { href: "/submissions/calendar", label: "Calendar" },
-  { href: "/submissions/settings", label: "Settings" },
+  { href: "/submissions/settings", label: "Settings", match: "prefix" as const },
 ];
 
 export default function SubmissionsLayout({

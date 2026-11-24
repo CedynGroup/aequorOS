@@ -84,3 +84,28 @@ def test_a_new_snapshot_selects_the_current_text() -> None:
     lmt = get_template("bog-lmt-liquidity-v1")
     assert lmt is not None
     assert template_for_snapshot(lmt, {"metadata": {}}) is lmt
+
+
+@pytest.mark.parametrize(
+    ("template_id", "section_code"),
+    [("bog-fx-nop-v1", "currency_positions"), ("bog-dbk-daily-v1", "nop_by_currency")],
+)
+def test_the_fcy_net_position_is_headed_in_whole_units_from_revision_2(
+    template_id: str, section_code: str
+) -> None:
+    """The FX run's ``net_ccy`` is whole FCY units; revision 1 headed it "(FCY '000)".
+
+    A package generated before the correction keeps the header it was filed with,
+    so its re-export stays byte-identical (D-021).
+    """
+    current = get_template(template_id)
+    assert current is not None
+
+    def header(snapshot: dict[str, Any]) -> str:
+        template = template_for_snapshot(current, snapshot)
+        section = next(s for s in template.sections if s.section_code == section_code)
+        return next(c.header for c in section.columns if c.key == "net_ccy")
+
+    stamped = {"metadata": {"template_revision": TEMPLATE_REVISIONS[template_id]}}
+    assert header(stamped) == "Net Position (FCY)"
+    assert header({"metadata": {}}) == "Net Position (FCY '000)"

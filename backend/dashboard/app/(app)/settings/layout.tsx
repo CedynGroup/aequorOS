@@ -6,6 +6,11 @@ import ModuleTabs from "@/components/shell/ModuleTabs";
 const tabs = [
   { href: "/settings", label: "General" },
   { href: "/settings/profile", label: "Profile & preferences" },
+  {
+    href: "/settings/notifications",
+    label: "Notifications",
+    match: "prefix" as const,
+  },
 ];
 
 export default function SettingsLayout({

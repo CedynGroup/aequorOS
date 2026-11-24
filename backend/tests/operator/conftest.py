@@ -225,6 +225,10 @@ def operator_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE", "false")
     monkeypatch.setenv("OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS", "0")
     monkeypatch.setenv("OPERATOR_PORT", "8100")
+    monkeypatch.setenv("REPORTING_GATEWAY_URL", "")
+    monkeypatch.setenv("REPORTING_GATEWAY_OPERATOR_DIR", "")
+    monkeypatch.setenv("REPORTING_GATEWAY_ENVIRONMENT", "sandbox")
+    monkeypatch.setenv("REPORTING_GATEWAY_FORWARD_CLIENT_CERTIFICATE", "false")
     get_operator_settings.cache_clear()
     # The login throttle is process-global by design — never let one test's
     # failures lock a later test out.

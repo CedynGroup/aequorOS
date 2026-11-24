@@ -21,7 +21,7 @@ from app.reporting.schemas.packages import (
     ReturnTemplateListRead,
     ReturnTemplateRead,
 )
-from app.reporting.service import family_access
+from app.reporting.service import family_access, reporting_settings
 from app.reporting.service.common import (
     get_package_or_404,
     read_package,
@@ -139,6 +139,11 @@ def list_return_templates(
         if eligibility is not None
         else None
     )
+    # For one bank, a return's default channel is the one its filings will use:
+    # the bank's own default replaces the electronic returns route.
+    bank_default = (
+        reporting_settings.filing_defaults(db, ctx, bank.id)[0] if bank is not None else None
+    )
     templates: list[ReturnTemplateRead] = []
     for definition in REGISTRY.values():
         resolved = (
@@ -196,7 +201,12 @@ def list_return_templates(
                 generator=definition.generator,
                 template_id=definition.template_id,
                 fidelity=definition.fidelity,
-                default_channel=definition.default_channel,
+                default_channel=reporting_settings.effective_channel(
+                    definition.default_channel,
+                    bank_default,
+                    return_code=definition.code,
+                    allowed=definition.allowed_channels,
+                ),
                 supports_working_copy=(
                     definition.generator == "bog_form" or definition.supports_working_copy
                 ),

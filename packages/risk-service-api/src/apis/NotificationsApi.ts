@@ -12,21 +12,48 @@
 
 import * as runtime from "../runtime";
 import type {
+  DeliveryStatus,
   ErrorResponse,
+  NotificationDeliveryListRead,
+  NotificationDeliveryRead,
   NotificationListRead,
+  NotificationOrgSettingsRead,
+  NotificationOrgSettingsUpdate,
+  NotificationPreferencesRead,
+  NotificationPreferencesUpdate,
   NotificationRead,
   NotificationsMarkAllRead,
 } from "../models/index";
 import {
+  DeliveryStatusFromJSON,
+  DeliveryStatusToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
+  NotificationDeliveryListReadFromJSON,
+  NotificationDeliveryListReadToJSON,
+  NotificationDeliveryReadFromJSON,
+  NotificationDeliveryReadToJSON,
   NotificationListReadFromJSON,
   NotificationListReadToJSON,
+  NotificationOrgSettingsReadFromJSON,
+  NotificationOrgSettingsReadToJSON,
+  NotificationOrgSettingsUpdateFromJSON,
+  NotificationOrgSettingsUpdateToJSON,
+  NotificationPreferencesReadFromJSON,
+  NotificationPreferencesReadToJSON,
+  NotificationPreferencesUpdateFromJSON,
+  NotificationPreferencesUpdateToJSON,
   NotificationReadFromJSON,
   NotificationReadToJSON,
   NotificationsMarkAllReadFromJSON,
   NotificationsMarkAllReadToJSON,
 } from "../models/index";
+
+export interface ListNotificationDeliveriesRequest {
+  status?: DeliveryStatus | null;
+  limit?: number;
+  offset?: number;
+}
 
 export interface ListNotificationsRequest {
   unreadOnly?: boolean;
@@ -38,10 +65,168 @@ export interface MarkNotificationReadRequest {
   notificationId: string;
 }
 
+export interface RetryNotificationDeliveryRequest {
+  deliveryId: string;
+}
+
+export interface UpdateNotificationPreferencesRequest {
+  notificationPreferencesUpdate: NotificationPreferencesUpdate;
+}
+
+export interface UpdateNotificationSettingsRequest {
+  notificationOrgSettingsUpdate: NotificationOrgSettingsUpdate;
+}
+
 /**
  *
  */
 export class NotificationsApi extends runtime.BaseAPI {
+  /**
+   * Get Notification Preferences
+   */
+  async getNotificationPreferencesRaw(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<NotificationPreferencesRead>> {
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/notifications/preferences`,
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      NotificationPreferencesReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Get Notification Preferences
+   */
+  async getNotificationPreferences(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<NotificationPreferencesRead> {
+    const response = await this.getNotificationPreferencesRaw(initOverrides);
+    return await response.value();
+  }
+
+  /**
+   * Get Notification Settings
+   */
+  async getNotificationSettingsRaw(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<NotificationOrgSettingsRead>> {
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/notifications/settings`,
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      NotificationOrgSettingsReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Get Notification Settings
+   */
+  async getNotificationSettings(
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<NotificationOrgSettingsRead> {
+    const response = await this.getNotificationSettingsRaw(initOverrides);
+    return await response.value();
+  }
+
+  /**
+   * List Notification Deliveries
+   */
+  async listNotificationDeliveriesRaw(
+    requestParameters: ListNotificationDeliveriesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<NotificationDeliveryListRead>> {
+    const queryParameters: any = {};
+
+    if (requestParameters["status"] != null) {
+      queryParameters["status"] = requestParameters["status"];
+    }
+
+    if (requestParameters["limit"] != null) {
+      queryParameters["limit"] = requestParameters["limit"];
+    }
+
+    if (requestParameters["offset"] != null) {
+      queryParameters["offset"] = requestParameters["offset"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/notifications/deliveries`,
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      NotificationDeliveryListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * List Notification Deliveries
+   */
+  async listNotificationDeliveries(
+    requestParameters: ListNotificationDeliveriesRequest = {},
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<NotificationDeliveryListRead> {
+    const response = await this.listNotificationDeliveriesRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
   /**
    * List Notifications
    */
@@ -197,6 +382,184 @@ export class NotificationsApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<NotificationRead> {
     const response = await this.markNotificationReadRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Retry Notification Delivery
+   */
+  async retryNotificationDeliveryRaw(
+    requestParameters: RetryNotificationDeliveryRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<NotificationDeliveryRead>> {
+    if (requestParameters["deliveryId"] == null) {
+      throw new runtime.RequiredError(
+        "deliveryId",
+        'Required parameter "deliveryId" was null or undefined when calling retryNotificationDelivery().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/notifications/deliveries/{delivery_id}/retry`.replace(
+          `{${"delivery_id"}}`,
+          encodeURIComponent(String(requestParameters["deliveryId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      NotificationDeliveryReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Retry Notification Delivery
+   */
+  async retryNotificationDelivery(
+    requestParameters: RetryNotificationDeliveryRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<NotificationDeliveryRead> {
+    const response = await this.retryNotificationDeliveryRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Update Notification Preferences
+   */
+  async updateNotificationPreferencesRaw(
+    requestParameters: UpdateNotificationPreferencesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<NotificationPreferencesRead>> {
+    if (requestParameters["notificationPreferencesUpdate"] == null) {
+      throw new runtime.RequiredError(
+        "notificationPreferencesUpdate",
+        'Required parameter "notificationPreferencesUpdate" was null or undefined when calling updateNotificationPreferences().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/notifications/preferences`,
+        method: "PUT",
+        headers: headerParameters,
+        query: queryParameters,
+        body: NotificationPreferencesUpdateToJSON(
+          requestParameters["notificationPreferencesUpdate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      NotificationPreferencesReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Update Notification Preferences
+   */
+  async updateNotificationPreferences(
+    requestParameters: UpdateNotificationPreferencesRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<NotificationPreferencesRead> {
+    const response = await this.updateNotificationPreferencesRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Update Notification Settings
+   */
+  async updateNotificationSettingsRaw(
+    requestParameters: UpdateNotificationSettingsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<NotificationOrgSettingsRead>> {
+    if (requestParameters["notificationOrgSettingsUpdate"] == null) {
+      throw new runtime.RequiredError(
+        "notificationOrgSettingsUpdate",
+        'Required parameter "notificationOrgSettingsUpdate" was null or undefined when calling updateNotificationSettings().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/notifications/settings`,
+        method: "PUT",
+        headers: headerParameters,
+        query: queryParameters,
+        body: NotificationOrgSettingsUpdateToJSON(
+          requestParameters["notificationOrgSettingsUpdate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      NotificationOrgSettingsReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Update Notification Settings
+   */
+  async updateNotificationSettings(
+    requestParameters: UpdateNotificationSettingsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<NotificationOrgSettingsRead> {
+    const response = await this.updateNotificationSettingsRaw(
       requestParameters,
       initOverrides,
     );

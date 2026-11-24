@@ -42,6 +42,11 @@ const SEVERITY_STYLES: Record<
 export function notificationHref(
   notification: NotificationRead,
 ): string | null {
+  // The notice names its own destination (notification platform); only an
+  // in-app path is followed, never an absolute URL.
+  if (notification.actionPath && notification.actionPath.startsWith("/")) {
+    return notification.actionPath;
+  }
   // The calendar, explicitly: /submissions now redirects to the Returns
   // workspace, and a deadline notification is asking the reader to look at
   // the deadline board.
@@ -197,9 +202,16 @@ export default function NotificationDrawer({
           >
             {markAll.isPending ? "Marking…" : "Mark all as read"}
           </button>
-          <span className="text-caption text-slate">
-            Approvals · regulator decisions · deadlines
-          </span>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              router.push("/settings/notifications");
+            }}
+            className="text-caption font-medium text-slate hover:text-navy"
+          >
+            Email settings
+          </button>
         </div>
       </aside>
     </div>

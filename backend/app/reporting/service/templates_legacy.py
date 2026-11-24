@@ -474,10 +474,64 @@ LEGACY_STRESS_PACK_TEMPLATE = _with_sections(
     ),
 )
 
+
+def _legacy_fx_nop() -> ReturnTemplate:
+    """FX-NOP as filed before 2026-11-23 (revision 1).
+
+    Its net-position column was headed "Net Position (FCY '000)" although the
+    figures in it were whole FCY units. The header is corrected under revision 2;
+    a package generated before keeps the header it was filed with.
+    """
+    base = current.TEMPLATES["bog-fx-nop-v1"]
+    positions = _section(base, "currency_positions")
+    return _with_sections(
+        base,
+        currency_positions=replace(
+            positions,
+            columns=tuple(
+                replace(column, header="Net Position (FCY '000)")
+                if column.key == "net_ccy"
+                else column
+                for column in positions.columns
+            ),
+        ),
+    )
+
+
+LEGACY_FX_NOP_TEMPLATE = _legacy_fx_nop()
+
+
+def _legacy_dbk_daily() -> ReturnTemplate:
+    """DBK-DAILY as filed before 2026-11-23 (revision 1).
+
+    The same header defect as FX-NOP's, on the daily return: the per-currency net
+    position was headed "Net Position (FCY '000)" over the FX run's whole-unit
+    figure. A package generated before revision 2 keeps the header it was filed with.
+    """
+    base = current.TEMPLATES["bog-dbk-daily-v1"]
+    positions = _section(base, "nop_by_currency")
+    return _with_sections(
+        base,
+        nop_by_currency=replace(
+            positions,
+            columns=tuple(
+                replace(column, header="Net Position (FCY '000)")
+                if column.key == "net_ccy"
+                else column
+                for column in positions.columns
+            ),
+        ),
+    )
+
+
+LEGACY_DBK_DAILY_TEMPLATE = _legacy_dbk_daily()
+
 #: template_id -> the template text packages generated before P0 render with.
 LEGACY_TEMPLATES: dict[str, ReturnTemplate] = {
     template.template_id: template
     for template in (
+        LEGACY_FX_NOP_TEMPLATE,
+        LEGACY_DBK_DAILY_TEMPLATE,
         LEGACY_APPENDIX2_TEMPLATE,
         LEGACY_SDI_STRESS_TEMPLATE,
         LEGACY_IRRBB_TEMPLATE,

@@ -20,10 +20,10 @@ from __future__ import annotations
 import io
 from datetime import date
 from pathlib import PurePosixPath
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Path, Query, Response, status
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import (
@@ -40,10 +40,14 @@ from app.api.deps import (
 from app.core.content_disposition import attachment_headers
 from app.data_engine.public import IngestionStorage
 from app.reporting.schemas.packages import (
+    ChannelCode,
     ChannelConfigPut,
     ChannelConfigRead,
     ChannelConfigWriteAcknowledgement,
     EmailFallbackInstructionsRead,
+    FilingProfilePut,
+    FilingProfileRead,
+    FilingProfileWriteAcknowledgement,
     FilingSetEntryRead,
     FilingSetPreviewRead,
     PackageApprovalDecisionCreate,
@@ -71,10 +75,21 @@ from app.reporting.schemas.packages import (
     SubmissionPollRead,
 )
 from app.reporting.schemas.report_comparison import ReportComparisonRead, ReportComparisonRequest
+from app.reporting.schemas.reporting_gateway import (
+    GatewayConnectionTest,
+    RegulatorQueryListRead,
+    RegulatorQueryMessageRead,
+    RegulatorQueryResponseCreate,
+    ReportingGatewayStatus,
+)
 from app.reporting.service import (
     artifact_versions,
     filing_preview,
+    gateway_catalog,
+    gateway_queries,
     report_comparison,
+    reporting_gateway_connection,
+    reporting_settings,
     version_chain,
 )
 from app.reporting.service import hub as regulatory_reporting
@@ -83,6 +98,7 @@ from app.reporting.service.anchors import (
     DEFAULT_HORIZON_MONTHS,
     DEFAULT_LOOKBACK_MONTHS,
 )
+from app.reporting.service.channels.errors import ChannelPreconditionError
 
 router = APIRouter(tags=["regulatory-reporting"])
 
@@ -108,7 +124,7 @@ def _artifact_media_type(kind: str, object_path: str) -> str:
     return _ARTIFACT_MEDIA_TYPES.get(kind, "application/octet-stream")
 
 
-type ChannelPath = Literal["orass_api", "orass_sandbox", "email", "manual"]
+type ChannelPath = Literal["orass_api", "orass_sandbox", "reporting_gateway", "email", "manual"]
 type BasisFilter = Literal["solo", "consolidated"]
 type PackageStatusFilter = Literal[
     "draft",
@@ -684,6 +700,20 @@ def preview_package_filing_set(
     _ = bank_id
     assert access.package is not None  # resolved by the dependency
     preview = filing_preview.build_preview(db, access.ctx, access.bank, access.package)
+    channel = reporting_workflow.resolved_channel(db, access.ctx, access.package)
+    figure_count: int | None = None
+    institution_code = preview.institution_code
+    if channel == "reporting_gateway":
+        institution_code = reporting_gateway_connection.enrolled_institution_code(
+            db, access.ctx, access.package.bank_id
+        )
+        try:
+            filed = gateway_catalog.gateway_payload(access.package, access.bank.currency)
+        except ChannelPreconditionError:
+            figure_count = None
+        else:
+            lines = filed.get("lines")
+            figure_count = len(cast(dict[str, object], lines)) if isinstance(lines, dict) else None
     return FilingSetPreviewRead(
         package_id=package_id,
         filing_set=[
@@ -698,11 +728,13 @@ def preview_package_filing_set(
             for entry in preview.filing_set
         ],
         satisfied=preview.satisfied,
-        institution_code=preview.institution_code,
+        institution_code=institution_code,
         content_digest=preview.content_digest,
         submission_revision=preview.submission_revision,
         is_first_filing=preview.is_first_filing,
         omissions=preview.omissions,
+        channel=cast(ChannelCode, channel),
+        gateway_figure_count=figure_count,
     )
 
 
@@ -804,6 +836,123 @@ def put_channel_config(
     configure-only caller reads nothing stored through the write.
     """
     return regulatory_reporting.put_channel_config(db, ctx, bank_id, channel, payload)
+
+
+@router.get(
+    "/banks/{bank_id}/regulatory-reporting/reporting-gateway",
+    response_model=ReportingGatewayStatus,
+    operation_id="getReportingGatewayStatus",
+)
+def get_reporting_gateway_status(
+    bank_id: str, db: DbSession, ctx: Tenant
+) -> ReportingGatewayStatus:
+    """The bank's AequorOS Reporting Gateway connection: enrolment steps, connection,
+    signature key facts and recent transmissions. Enrolment is carried out by the
+    channel operator; this never returns key material."""
+    return reporting_gateway_connection.gateway_status(db, ctx, bank_id)
+
+
+@router.get(
+    "/banks/{bank_id}/regulatory-reporting/regulator-queries",
+    response_model=RegulatorQueryListRead,
+    operation_id="listRegulatorQueries",
+)
+def list_regulator_queries(bank_id: str, db: DbSession, ctx: Tenant) -> RegulatorQueryListRead:
+    """The regulator's queries on the bank's filings, read live from the gateway.
+
+    Every query and its whole thread, newest first, each linked to the bank's own
+    return when the receipt is one this bank filed.
+    """
+    return gateway_queries.list_queries(db, ctx, bank_id)
+
+
+@router.post(
+    "/banks/{bank_id}/regulatory-reporting/regulator-queries/{number}/acknowledgement",
+    status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="acknowledgeRegulatorQuery",
+)
+def acknowledge_regulator_query(
+    bank_id: str,
+    number: Annotated[str, Path(pattern=r"^QRY-\d{4}-\d{4,}$")],
+    db: DbSession,
+    ctx: ScopedMutationTenant,
+) -> Response:
+    """Tell the regulator the query has reached the bank (shown to the supervisor)."""
+    gateway_queries.acknowledge_query(db, ctx, bank_id, number)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/banks/{bank_id}/regulatory-reporting/regulator-queries/{number}/responses",
+    response_model=RegulatorQueryMessageRead,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="respondToRegulatorQuery",
+)
+def respond_to_regulator_query(
+    bank_id: str,
+    number: Annotated[str, Path(pattern=r"^QRY-\d{4}-\d{4,}$")],
+    payload: RegulatorQueryResponseCreate,
+    db: DbSession,
+    ctx: ScopedMutationTenant,
+) -> RegulatorQueryMessageRead:
+    """Send the bank's reply to the regulator: the transmitting officer's act."""
+    return gateway_queries.respond_to_query(db, ctx, bank_id, number, payload)
+
+
+@router.post(
+    "/banks/{bank_id}/regulatory-reporting/regulator-queries/{number}/correction",
+    response_model=ResubmissionRequestRead,
+    status_code=status.HTTP_201_CREATED,
+    operation_id="startRegulatorRequestedCorrection",
+)
+def start_regulator_requested_correction(
+    bank_id: str,
+    number: Annotated[str, Path(pattern=r"^QRY-\d{4}-\d{4,}$")],
+    db: DbSession,
+    ctx: ScopedMutationTenant,
+) -> ResubmissionRequestRead:
+    """Open the correction the regulator asked for; the return goes back to its preparer.
+
+    Transmitting the corrected version files an amendment, and AequorOS then answers
+    the regulator's request with the new receipt.
+    """
+    return gateway_queries.start_correction(db, ctx, bank_id, number)
+
+
+@router.post(
+    "/banks/{bank_id}/regulatory-reporting/reporting-gateway/connection-test",
+    response_model=GatewayConnectionTest,
+    operation_id="testReportingGatewayConnection",
+)
+def test_reporting_gateway_connection(
+    bank_id: str, db: DbSession, ctx: ScopedMutationTenant
+) -> GatewayConnectionTest:
+    """Obtain a gateway token and its keys without filing anything."""
+    return reporting_gateway_connection.test_connection(db, ctx, bank_id)
+
+
+@router.get(
+    "/banks/{bank_id}/regulatory-reporting/filing-profile",
+    response_model=FilingProfileRead,
+    operation_id="getFilingProfile",
+)
+def get_filing_profile(bank_id: str, db: DbSession, ctx: Tenant) -> FilingProfileRead:
+    """How the bank files: the shared reporting basis and contact, the institution
+    code from its institution profile, and the default channel for approved returns."""
+    return reporting_settings.get_filing_profile(db, ctx, bank_id)
+
+
+@router.put(
+    "/banks/{bank_id}/regulatory-reporting/filing-profile",
+    response_model=FilingProfileWriteAcknowledgement,
+    operation_id="putFilingProfile",
+)
+def put_filing_profile(
+    bank_id: str, payload: FilingProfilePut, db: DbSession, ctx: ScopedMutationTenant
+) -> FilingProfileWriteAcknowledgement:
+    """Set the filing profile and default channel (exact reg/configure/restricted
+    authority for this bank). A channel the bank is not connected to is refused."""
+    return reporting_settings.put_filing_profile(db, ctx, bank_id, payload)
 
 
 @router.get(

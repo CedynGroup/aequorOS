@@ -21,14 +21,18 @@ from app.fx.schemas import FxScenarioBatchCreate
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.liquidity.service import regulatory_liquidity
 from app.models import BankReportingPeriod, RegulatoryPackage
+from app.reporting.models.packages import RegulatoryChannelConfig
 from app.reporting.schemas.packages import (
+    FilingProfilePut,
     RegulatoryPackageCreate,
     ReportingSettingsPut,
 )
 from app.reporting.service import (
     calendar,
     generation,
+    packages,
     reporting_settings,
+    workflow,
 )
 from app.reporting.service.registry import (
     daily_next_business_day,
@@ -356,3 +360,92 @@ def test_reporting_settings_get_defaults_empty_then_round_trips(
 def test_reporting_settings_rejects_out_of_range_day() -> None:
     with pytest.raises(ValueError, match="between 1 and 31"):
         ReportingSettingsPut(deadline_overrides={"CAR-RWA": 40})
+
+
+def test_filing_profile_round_trips_for_every_channel(db_session: Session) -> None:
+    materialize_canonical_test_book(db_session)
+    empty = reporting_settings.get_filing_profile(db_session, MAKER, SAMPLE_BANK_ID)
+    assert empty.reporting_basis == "solo"
+    assert empty.default_channel is None
+
+    reporting_settings.put_filing_profile(
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        FilingProfilePut(
+            reporting_basis="consolidated",
+            contact_name="  Ama Mensah ",
+            contact_email="regreporting@bank.test",
+            default_channel="manual",
+        ),
+    )
+
+    stored = reporting_settings.get_filing_profile(db_session, MAKER, SAMPLE_BANK_ID)
+    assert stored.contact_name == "Ama Mensah"
+    assert stored.default_channel == "manual"
+    config, _credentials = workflow._load_channel_context(  # pyright: ignore[reportPrivateUsage]
+        db_session, MAKER, SAMPLE_BANK_ID, "email"
+    )
+    assert config["contact_email"] == "regreporting@bank.test"
+    assert config["reporting_basis"] == "consolidated"
+
+
+def test_the_gateway_cannot_be_the_default_until_the_bank_is_enrolled(
+    db_session: Session,
+) -> None:
+    materialize_canonical_test_book(db_session)
+    with pytest.raises(HTTPException) as refused:
+        reporting_settings.put_filing_profile(
+            db_session, MAKER, SAMPLE_BANK_ID, FilingProfilePut(default_channel="reporting_gateway")
+        )
+    assert refused.value.status_code == 422
+    assert "Ask your AequorOS team to enrol it" in str(refused.value.detail)
+
+    db_session.add(
+        RegulatoryChannelConfig(
+            organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
+            channel="reporting_gateway",
+            config={"enrolled_at": "2026-11-21T12:00:00+00:00"},
+        )
+    )
+    db_session.commit()
+    reporting_settings.put_filing_profile(
+        db_session, MAKER, SAMPLE_BANK_ID, FilingProfilePut(default_channel="reporting_gateway")
+    )
+    assert (
+        reporting_settings.get_filing_profile(db_session, MAKER, SAMPLE_BANK_ID).default_channel
+        == "reporting_gateway"
+    )
+
+
+def test_the_default_channel_replaces_only_the_electronic_returns_route(
+    db_session: Session,
+) -> None:
+    materialize_canonical_test_book(db_session)
+    db_session.add(
+        RegulatoryChannelConfig(
+            organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
+            channel="reporting_gateway",
+            config={"enrolled_at": "2026-11-21T12:00:00+00:00"},
+        )
+    )
+    db_session.commit()
+    resolve = workflow._resolved_channel  # pyright: ignore[reportPrivateUsage]
+    electronic = get_definition("CAR-RWA")
+    assert electronic is not None and electronic.default_channel == "orass_sandbox"
+    assert resolve(db_session, MAKER, SAMPLE_BANK_ID, electronic) == "orass_sandbox"
+
+    reporting_settings.put_filing_profile(
+        db_session, MAKER, SAMPLE_BANK_ID, FilingProfilePut(default_channel="reporting_gateway")
+    )
+
+    assert resolve(db_session, MAKER, SAMPLE_BANK_ID, electronic) == "reporting_gateway"
+    assert resolve(db_session, MAKER, SAMPLE_BANK_ID, None) == "manual"
+    templates = {
+        template.code: template.default_channel
+        for template in packages.list_return_templates(db_session, MAKER, SAMPLE_BANK_ID).templates
+    }
+    assert templates["CAR-RWA"] == "reporting_gateway"
+    assert "manual" in templates.values()

@@ -1005,7 +1005,7 @@ def test_the_approver_signature_and_the_approval_decision_are_one_act(
     # And the maker is told, by the same code path a bare decision used.
     told = db_session.scalars(
         select(Notification).where(
-            Notification.type == "reporting.package.approved",
+            Notification.event_key == "filing.stage_approved",
             Notification.recipient_user_id == DEMO_USER_ID,
         )
     ).all()
@@ -1230,7 +1230,7 @@ def test_send_back_returns_the_package_for_rework_and_unfreezes_the_figures(
     # The preparer is told, with the note.
     told = db_session.scalars(
         select(Notification).where(
-            Notification.type == "reporting.package.approval_rejected",
+            Notification.event_key == "filing.sent_back",
             Notification.recipient_user_id == DEMO_USER_ID,
         )
     ).all()

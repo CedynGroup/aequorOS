@@ -2066,6 +2066,252 @@ export function getTenant(orgId: string): Promise<OperatorTenant> {
   );
 }
 
+// --------------------------------------------------------------------------
+// AequorOS Reporting Gateway enrolment (channel operator only).
+// --------------------------------------------------------------------------
+
+export type GatewayRenewalStatus =
+  "in_progress" | "failed" | "revocation_pending" | "complete" | "cancelled";
+export type GatewayRenewalStage =
+  "key_prepared" | "client_issued" | "switched" | "previous_revoked";
+
+/** The latest renewal of a bank's gateway client certificate. Never key material. */
+export interface GatewayCertificateRenewal {
+  status: GatewayRenewalStatus;
+  stage: GatewayRenewalStage;
+  trigger: "staff" | "scheduled";
+  requested_by: string;
+  reason: string;
+  started_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  previous_client_id: string | null;
+  previous_not_after: string | null;
+  new_client_id: string | null;
+  previous_revoked_at: string | null;
+  error: string | null;
+  failures: number;
+}
+
+/** GET/POST /operator/v1/tenants/{org}/banks/{bank}/reporting-gateway — never key material. */
+export interface ReportingGatewayEnrolment {
+  bank_id: string;
+  enrolled: boolean;
+  institution_code: string | null;
+  environment: "sandbox" | "production" | null;
+  client_id: string | null;
+  certificate_not_after: string | null;
+  signing_kid: string | null;
+  enrolled_at: string | null;
+  last_connection_test_at: string | null;
+  last_connection_test_ok: boolean | null;
+  message?: string | null;
+  /** From when the certificate is due for renewal (expiry less the renewal window). */
+  renewal_due_from?: string | null;
+  /** When the staff plane's scheduled check last looked at this bank. */
+  last_renewal_check_at?: string | null;
+  certificate_renewal?: GatewayCertificateRenewal | null;
+}
+
+export interface ReportingGatewayContact {
+  role: string;
+  name: string;
+  email: string;
+}
+
+function gatewayPath(orgId: string, bankId: string): string {
+  return `/operator/v1/tenants/${encodeURIComponent(orgId)}/banks/${encodeURIComponent(bankId)}/reporting-gateway`;
+}
+
+export function getReportingGatewayEnrolment(
+  orgId: string,
+  bankId: string,
+): Promise<ReportingGatewayEnrolment> {
+  return request<ReportingGatewayEnrolment>(gatewayPath(orgId, bankId));
+}
+
+/**
+ * Enrol the bank on the gateway (idempotent): creates its client key and
+ * filing signature key in the vault, has the gateway issue the client and
+ * register the key, then tests the bank's connection. Nothing is filed.
+ */
+export function enrolOnReportingGateway(
+  orgId: string,
+  bankId: string,
+  body: {
+    institution_code?: string | null;
+    contacts: ReportingGatewayContact[];
+  },
+): Promise<ReportingGatewayEnrolment> {
+  return request<ReportingGatewayEnrolment>(
+    `${gatewayPath(orgId, bankId)}/enrolment`,
+    {
+      method: "POST",
+      body,
+    },
+  );
+}
+
+/**
+ * Renew the bank's gateway client certificate now, or resume an unfinished renewal:
+ * a new key and client are issued and tested as the bank before it is switched
+ * over, then the old client is revoked. The bank keeps filing throughout.
+ */
+export function renewReportingGatewayCertificate(
+  orgId: string,
+  bankId: string,
+  reason: string,
+): Promise<ReportingGatewayEnrolment> {
+  return request<ReportingGatewayEnrolment>(
+    `${gatewayPath(orgId, bankId)}/certificate-renewal`,
+    {
+      method: "POST",
+      body: { reason },
+    },
+  );
+}
+
+/** Abandon an unfinished renewal that has not switched the bank over yet. */
+export function cancelReportingGatewayCertificateRenewal(
+  orgId: string,
+  bankId: string,
+  reason: string,
+): Promise<ReportingGatewayEnrolment> {
+  return request<ReportingGatewayEnrolment>(
+    `${gatewayPath(orgId, bankId)}/certificate-renewal/cancel`,
+    { method: "POST", body: { reason } },
+  );
+}
+
+export type GatewayInstitutionType =
+  | "universal_bank"
+  | "rural_bank"
+  | "savings_and_loans"
+  | "microfinance"
+  | "other";
+
+export interface GatewayInstitution {
+  code: string;
+  name: string;
+  type: GatewayInstitutionType;
+  status: "enrolled" | "live" | "suspended";
+  enrolled_at: string;
+  clients: {
+    client_id: string;
+    environment: "sandbox" | "production";
+    certificate_not_after: string;
+    revoked: boolean;
+  }[];
+  signing_keys: {
+    kid: string;
+    status: "active" | "retired" | "revoked";
+    registered_at: string;
+  }[];
+  /** Set when the institution is an AequorOS client bank (AequorOS holds its keys). */
+  aequoros_bank: {
+    organization_id: string;
+    bank_id: string;
+    name: string;
+  } | null;
+}
+
+export interface GatewayClientIssued {
+  client_id: string;
+  certificate_pem: string;
+  certificate_chain_pem: string;
+  not_after: string;
+  scopes: string[];
+}
+
+const GATEWAY_INSTITUTIONS = "/operator/v1/reporting-gateway/institutions";
+
+function institutionPath(code: string): string {
+  return `${GATEWAY_INSTITUTIONS}/${encodeURIComponent(code)}`;
+}
+
+/** Every institution on the AequorOS Reporting Gateway, by code. */
+export function listGatewayInstitutions(): Promise<{
+  items: GatewayInstitution[];
+}> {
+  return request<{ items: GatewayInstitution[] }>(GATEWAY_INSTITUTIONS);
+}
+
+export function getGatewayInstitution(
+  code: string,
+): Promise<GatewayInstitution> {
+  return request<GatewayInstitution>(institutionPath(code));
+}
+
+/** Enrol an institution that files with its own software (idempotent on the code). */
+export function enrolGatewayInstitution(body: {
+  code: string;
+  name: string;
+  type: GatewayInstitutionType;
+  contacts: ReportingGatewayContact[];
+}): Promise<GatewayInstitution> {
+  return request<GatewayInstitution>(GATEWAY_INSTITUTIONS, {
+    method: "POST",
+    body,
+  });
+}
+
+/** Issue an API client from the institution's own certificate request and public key. */
+export function issueGatewayClient(
+  code: string,
+  body: {
+    environment: "sandbox" | "production";
+    csr_pem: string;
+    public_jwk: Record<string, string>;
+    software?: { name: string; version: string } | null;
+  },
+): Promise<GatewayClientIssued> {
+  return request<GatewayClientIssued>(`${institutionPath(code)}/clients`, {
+    method: "POST",
+    body,
+  });
+}
+
+export function registerGatewaySigningKey(
+  code: string,
+  body: { kid: string; public_jwk: Record<string, string> },
+): Promise<GatewayInstitution> {
+  return request<GatewayInstitution>(`${institutionPath(code)}/signing-keys`, {
+    method: "POST",
+    body,
+  });
+}
+
+export function retireGatewaySigningKey(
+  code: string,
+  kid: string,
+): Promise<GatewayInstitution> {
+  return request<GatewayInstitution>(
+    `${institutionPath(code)}/signing-keys/${encodeURIComponent(kid)}/retire`,
+    { method: "POST" },
+  );
+}
+
+export function changeGatewayInstitutionStatus(
+  code: string,
+  body: { status: "live" | "suspended"; reason: string },
+): Promise<GatewayInstitution> {
+  return request<GatewayInstitution>(`${institutionPath(code)}/status`, {
+    method: "POST",
+    body,
+  });
+}
+
+export function revokeGatewayClient(
+  code: string,
+  clientId: string,
+  reason: string,
+): Promise<GatewayInstitution> {
+  return request<GatewayInstitution>(
+    `${institutionPath(code)}/clients/${encodeURIComponent(clientId)}/revoke`,
+    { method: "POST", body: { reason } },
+  );
+}
+
 export interface TenantUser {
   email: string;
   full_name: string | null;

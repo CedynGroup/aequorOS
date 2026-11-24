@@ -1313,6 +1313,8 @@ remove the line when a group gains a recipe that can run on a local stack.
 ### Staff operator API
 
 - `operator-bank-encryption`: key custody operations require a key management service.
+- `operator-reporting-gateway`: enrolment needs a running AequorOS Reporting Gateway
+  (`gateway/`) and its operator client.
 - `operator-bi`: backfill requires a bank with BI history and a worker to process it.
 - `operator-activity`: the inspection-session feed combines records produced by
   other workflows.

@@ -108,7 +108,9 @@ PACKAGE_ATTACHMENT_SOURCES = ("package_upload", "icaap_cycle")
 # "orass_api" is the production machine-to-machine channel (Vizor API Service
 # wire contract configured per bank once BoG/Regnology onboarding completes);
 # "orass_sandbox" remains the labeled simulator for pre-onboarding use.
-SUBMISSION_CHANNELS = ("orass_api", "orass_sandbox", "email", "manual")
+SUBMISSION_CHANNELS = ("orass_api", "orass_sandbox", "reporting_gateway", "email", "manual")
+#: Channels a bank may choose as where its approved returns go by default.
+DEFAULT_CHANNELS = ("reporting_gateway", "orass_api", "manual")
 SUBMISSION_EVENTS = ("submitted", "status_poll", "acknowledged", "rejected", "declined")
 APPROVAL_ACTIONS = ("requested", "approved", "rejected")
 RESUBMISSION_STATUSES = ("requested", "granted", "denied")
@@ -609,16 +611,25 @@ class RegulatoryChannelConfig(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
 
 
 class RegulatoryReportingSettings(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
-    """Per-bank reporting configuration — currently the deadline-override map.
+    """Per-bank reporting configuration: how the bank files.
 
     ``deadline_overrides`` is a ``{return_code: day_of_month}`` JSON map that
     lets Bank-IT correct the registry's placeholder monthly deadlines (e.g. the
     BSD2 day-14 and FX-NOP day-10 placeholders) once ORASS onboarding confirms
-    the real day. One row per (org, bank). RLS-forced like every tenant table.
+    the real day. ``filing_profile`` holds what every channel shares
+    (``reporting_basis``, ``contact_name``, ``contact_email``); the institution
+    code stays on the institution profile. ``default_channel`` is where the
+    bank's approved returns go when no channel is chosen for one filing; unset,
+    each return follows its registry default. One row per (org, bank).
+    RLS-forced like every tenant table.
     """
 
     __tablename__ = "regulatory_reporting_settings"
     __table_args__ = (
+        CheckConstraint(
+            f"default_channel IS NULL OR default_channel IN ({_values(DEFAULT_CHANNELS)})",
+            name="ck_regulatory_reporting_settings_default_channel",
+        ),
         ForeignKeyConstraint(
             ["bank_id", "organization_id"],
             ["banks.id", "banks.organization_id"],
@@ -639,3 +650,7 @@ class RegulatoryReportingSettings(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     deadline_overrides: Mapped[dict[str, Any]] = mapped_column(
         JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
     )
+    filing_profile: Mapped[dict[str, Any]] = mapped_column(
+        JSON, default=dict, server_default=sql_text("'{}'"), nullable=False
+    )
+    default_channel: Mapped[str | None] = mapped_column(String(20), nullable=True)

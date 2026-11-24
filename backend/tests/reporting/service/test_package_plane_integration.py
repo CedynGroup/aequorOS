@@ -78,8 +78,18 @@ def _bank(db: Session) -> Bank:
     return bank
 
 
-def _package(db: Session, *, return_code: str = "LCR-NSFR", family: str = "liquidity"):
-    """A minimal package row. The suite is about the plane, not the generators."""
+def _package(
+    db: Session,
+    *,
+    return_code: str = "LCR-NSFR",
+    family: str = "liquidity",
+    formula_workbook_filed: bool = True,
+):
+    """A minimal package row. The suite is about the plane, not the generators.
+
+    Generated "today" unless told otherwise: it carries the stamp generation puts on
+    a package whose formula workbook is filed (``generation._stamp_formula_workbook``).
+    """
     package = RegulatoryPackage(
         organization_id=DEMO_ORG_ID,
         bank_id=SAMPLE_BANK_ID,
@@ -90,7 +100,10 @@ def _package(db: Session, *, return_code: str = "LCR-NSFR", family: str = "liqui
         basis="solo",
         status="approved",
         version=1,
-        snapshot={"sections": []},
+        snapshot={
+            "sections": [],
+            "metadata": {"formula_workbook": "filed"} if formula_workbook_filed else {},
+        },
         source_runs=[],
         register_state_digest=digests.register_state_digest(
             register_state.project_register_state(db, MAKER, SAMPLE_BANK_ID)
@@ -330,10 +343,17 @@ def _artifacts(db: Session, package: RegulatoryPackage, kinds: tuple[str, ...]) 
     db.flush()
 
 
-def _filed_kinds(db: Session, return_code: str, kinds: tuple[str, ...]) -> list[str]:
+def _filed_kinds(
+    db: Session, return_code: str, kinds: tuple[str, ...], *, formula_workbook_filed: bool = True
+) -> list[str]:
     definition = get_definition(return_code)
     assert definition is not None, return_code
-    package = _package(db, return_code=return_code, family=definition.family)
+    package = _package(
+        db,
+        return_code=return_code,
+        family=definition.family,
+        formula_workbook_filed=formula_workbook_filed,
+    )
     _artifacts(db, package, kinds)
     filed, detail = reporting_workflow._filing_set(  # noqa: SLF001 - the unit under test
         db, MAKER, package, mint_missing=False
@@ -355,22 +375,15 @@ def test_the_formula_copy_of_an_official_form_is_filed(db_session: Session) -> N
     assert "docx_working" not in kinds, "the Word draft never reaches a regulator"
 
 
-#: The other half of the guarantee. These returns DO produce a working copy
-#: (``supports_working_copy``), so the exclusion is a real decision about them,
-#: not an artefact of their never having one. SDI-STRESS-ANNUAL is also the
-#: return whose pre-P0 ``xlsx_working`` digest is pinned by D-021 — filing it
-#: would have forced a re-baseline of that fixture.
+#: Founder decision 2026-11-23: every return that has a formula workbook files it,
+#: not only the official forms. These returns build theirs over the sealed figures
+#: (``supports_working_copy``), so filing it is a real decision about them.
 @pytest.mark.parametrize(
-    "return_code", ["SDI-LMT-MONTHLY", "SDI-STRESS-ANNUAL", "SDI-LE-MONTHLY", "NPL-MONTHLY"]
+    "return_code",
+    ["CAR-RWA", "FX-NOP", "SDI-LMT-MONTHLY", "SDI-STRESS-ANNUAL", "SDI-LE-MONTHLY", "NPL-MONTHLY"],
 )
-def test_a_non_official_working_copy_is_not_filed(db_session: Session, return_code: str) -> None:
-    """An SDI packet's working sheet is an AequorOS calculation aid.
-
-    It carries a different label from BoG's formula workbook — ``WORKING COPY —
-    FOR INTERNAL REVIEW · not a filing artifact`` — and that sentence has to
-    stay TRUE. The whole finding that produced the generator axis was a label
-    contradicting behaviour, so this asserts the behaviour the label claims.
-    """
+def test_every_formula_workbook_is_filed(db_session: Session, return_code: str) -> None:
+    """The regulator receives the Excel with formulas, not only the values."""
     materialize_canonical_test_book(db_session)
     definition = get_definition(return_code)
     assert definition is not None, return_code
@@ -378,8 +391,36 @@ def test_a_non_official_working_copy_is_not_filed(db_session: Session, return_co
     assert definition.generator != "bog_form"
 
     kinds = _filed_kinds(db_session, return_code, ("pdf", "xlsx", "csv", "xlsx_working"))
-    assert "xlsx_working" not in kinds, "an AequorOS calculation sheet is not filed"
+    assert "xlsx_working" in kinds, "the formula workbook is part of what is filed"
+
+
+@pytest.mark.parametrize("return_code", ["CAR-RWA", "NPL-MONTHLY"])
+def test_a_package_generated_before_the_decision_files_values_only(
+    db_session: Session, return_code: str
+) -> None:
+    """Its workbook still says, on its face, that it is not a filing artifact.
+
+    So it is not filed; regenerating the return brings the formula workbook.
+    """
+    materialize_canonical_test_book(db_session)
+    kinds = _filed_kinds(
+        db_session,
+        return_code,
+        ("pdf", "xlsx", "csv", "xlsx_working"),
+        formula_workbook_filed=False,
+    )
+    assert "xlsx_working" not in kinds
     assert kinds == ["pdf", "xlsx", "csv"]
+
+
+def test_an_official_form_files_its_workbook_whenever_it_was_generated(
+    db_session: Session,
+) -> None:
+    materialize_canonical_test_book(db_session)
+    kinds = _filed_kinds(
+        db_session, "BSD2", ("pdf", "xlsx", "csv", "xlsx_working"), formula_workbook_filed=False
+    )
+    assert "xlsx_working" in kinds
 
 
 @pytest.mark.parametrize("return_code", ["LCR-NSFR", "BSD2", "ICAAP-REPORT"])

@@ -14,7 +14,8 @@ import fc from "fast-check";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import type { EffectiveCapabilityRead } from "@aequoros/risk-service-api";
-import SettingsPage from "../../app/(app)/submissions/settings/page";
+import OrassSettingsPage from "../../app/(app)/submissions/settings/orass/page";
+import SigningSettingsPage from "../../app/(app)/submissions/settings/signing/page";
 import ProfileProvider from "../../components/profile/ProfileProvider";
 import BankProvider from "../../components/shell/BankContext";
 import { IMPERSONATION_MARKER_COOKIE } from "../../lib/impersonation-cookies";
@@ -31,7 +32,8 @@ import { queryAuthorityScope } from "../../lib/api/queryPolicy";
  * restricted / whole-institution binding, and the signing-policy + placement
  * template PUTs on an ORGANIZATION-scope reg / configure / restricted binding
  * (VAL-CFG-008: one bank's grant is deliberately not organization-wide
- * authority). These specs render the real settings page through the real
+ * authority). These specs render the real settings pages (the ORASS channel
+ * page and the signing-policies page) through the real
  * ProfileProvider and BankProvider, with the authority projection and every
  * read/write answered at the MSW network boundary, and pin that the page
  * mirrors both gates: the two save controls are disabled with an explained
@@ -59,7 +61,7 @@ const state: {
   impersonating: boolean;
   /** Drives the channel-config read: what the backend would have stored. */
   storedConfig: boolean;
-  reads: { channelConfig: number; signingPolicies: number };
+  reads: { channelConfig: number; signingPolicies: number; orassAccess: number };
   writes: { method: string; path: string; body: unknown }[];
 } = {
   bankCapabilities: [],
@@ -69,7 +71,7 @@ const state: {
   impersonating: false,
   /** Drives the channel-config read: what the backend would have stored. */
   storedConfig: false,
-  reads: { channelConfig: 0, signingPolicies: 0 },
+  reads: { channelConfig: 0, signingPolicies: 0, orassAccess: 0 },
   writes: [],
 };
 
@@ -158,7 +160,7 @@ const server = setupServer(
       return HttpResponse.json({
         bank_id: BANK,
         channel: "orass_sandbox",
-        config: { institution_code: "SBL-001", basis: "solo" },
+        config: { sandbox_behavior: "decline", resubmission_behavior: "grant" },
         has_credentials: true,
         credential_fingerprint: "fingerprint-1010",
         updated_at: "2026-11-06T00:00:00Z",
@@ -180,6 +182,16 @@ const server = setupServer(
         credentials_rotated: false,
         created: true,
       });
+    },
+  ),
+  http.get(
+    `${apiBaseUrl}/banks/${BANK}/regulatory-reporting/channel-configs/orass_api`,
+    () => {
+      state.reads.orassAccess += 1;
+      return HttpResponse.json(
+        { detail: "No configuration stored for this channel." },
+        { status: 404 },
+      );
     },
   ),
   http.get(`${apiBaseUrl}/attestation/signing-policies`, () => {
@@ -225,7 +237,7 @@ beforeEach(() => {
   state.authError = false;
   state.impersonating = false;
   state.storedConfig = false;
-  state.reads = { channelConfig: 0, signingPolicies: 0 };
+  state.reads = { channelConfig: 0, signingPolicies: 0, orassAccess: 0 };
   state.writes = [];
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -278,9 +290,16 @@ function Providers({ children }: React.PropsWithChildren) {
   );
 }
 
+/** The ORASS channel page: the access form and the rehearsal simulator form. */
 function mountPage() {
-  return render(<SettingsPage />, { wrapper: Providers });
+  return render(<OrassSettingsPage />, { wrapper: Providers });
 }
+
+function mountSigningPage() {
+  return render(<SigningSettingsPage />, { wrapper: Providers });
+}
+
+const CHANNEL_SAVE = "Save simulator settings";
 
 const BANK_GATE_REASON =
   /Requires Regulatory Reporting configure access with Restricted data for this institution/i;
@@ -337,24 +356,25 @@ it("denies the channel configuration without the reg restricted view sentence", 
   expect(
     await screen.findByText("You do not have access to these settings."),
   ).toBeVisible();
-  expect(screen.queryByText("No credentials stored")).not.toBeInTheDocument();
+  expect(screen.queryByText("None stored")).not.toBeInTheDocument();
   expect(
-    screen.queryByRole("button", { name: "Save configuration" }),
+    screen.queryByRole("button", { name: CHANNEL_SAVE }),
   ).not.toBeInTheDocument();
   expect(state.reads.channelConfig).toBe(0);
+  expect(state.reads.orassAccess).toBe(0);
 });
 
 it("reads the stored channel for an exact-bank reg/restricted viewer", async () => {
   state.bankCapabilities = [capability("reg", { permission: "view" })];
   state.storedConfig = true;
   mountPage();
-  expect(await screen.findByText("Credentials stored")).toBeVisible();
+  expect(await screen.findByDisplayValue("Declined")).toBeVisible();
   expect(state.reads.channelConfig).toBeGreaterThanOrEqual(1);
 });
 
 it("hides the configured signing policies without the organization view sentence", async () => {
   state.bankCapabilities = [capability("reg", { permission: "view" })];
-  mountPage();
+  mountSigningPage();
   // Wait for the settled organization-scope requirement, not the shared denial
   // prefix, so a regression that fetches once the profile has loaded cannot hide.
   expect(
@@ -372,20 +392,22 @@ it("saves the channel configuration and refetches the view-gated read", async ()
   ];
   mountPage();
   // A channel the bank has never configured reads 404: the unconfigured
-  // status, not the outage pill.
-  expect(await screen.findByText("No credentials stored")).toBeVisible();
-  const save = await screen.findByRole("button", { name: "Save configuration" });
+  // state (the ORASS warning), not an outage panel.
+  expect(
+    await screen.findByText("Your bank can’t file through ORASS yet."),
+  ).toBeVisible();
+  const save = await screen.findByRole("button", { name: CHANNEL_SAVE });
   await waitFor(() => expect(save).toBeEnabled());
   await userEvent.setup().click(save);
   await waitFor(() =>
     expect(state.writes.some((w) => w.path === "channel-config")).toBe(true),
   );
   // The save hook discards the write-only acknowledgement and refetches the
-  // read: the credential-status pill reflects the refetched GET, not the PUT.
+  // view-gated read.
   await waitFor(() =>
-    expect(screen.getByText("Credentials stored")).toBeVisible(),
+    expect(state.reads.channelConfig).toBeGreaterThanOrEqual(2),
   );
-  expect(state.reads.channelConfig).toBeGreaterThanOrEqual(2);
+  expect(await screen.findByText("Saved.")).toBeVisible();
 });
 
 it("never offers the channel-config save while inspecting as another principal", async () => {
@@ -402,7 +424,7 @@ it("never offers the channel-config save while inspecting as another principal",
     await screen.findByText("You do not have access to these settings."),
   ).toBeVisible();
   expect(
-    screen.queryByRole("button", { name: "Save configuration" }),
+    screen.queryByRole("button", { name: CHANNEL_SAVE }),
   ).not.toBeInTheDocument();
   expect(state.reads.channelConfig).toBe(0);
 });
@@ -421,7 +443,7 @@ it("shows the shell's unreachable panel when the profile read fails", async () =
 
 it("explains a disabled signing-policy save for a reader", async () => {
   state.bankCapabilities = [capability("reg", { permission: "view" })];
-  mountPage();
+  mountSigningPage();
   await expectPolicySaveDisabled(ORG_GATE_REASON);
 });
 
@@ -432,16 +454,18 @@ it("lets a bank-scoped Configurator save the channel but not a signing policy", 
   mountPage();
   await waitFor(async () =>
     expect(
-      screen.getByRole("button", { name: "Save configuration" }),
+      screen.getByRole("button", { name: CHANNEL_SAVE }),
     ).toBeEnabled(),
   );
+  cleanup();
+  mountSigningPage();
   await expectPolicySaveDisabled(ORG_GATE_REASON);
 });
 
 it("saves a signing policy with an organization-scope reg configure projection", async () => {
   state.bankCapabilities = [capability("reg", { permission: "view" })];
   state.orgCapabilities = [capability("reg")];
-  mountPage();
+  mountSigningPage();
   const user = userEvent.setup();
   await user.selectOptions(
     await screen.findByLabelText(/Return family/i),
@@ -463,7 +487,7 @@ it("never offers the signing-policy save while inspecting as another principal",
   state.orgCapabilities = [capability("reg")];
   state.impersonating = true;
   plantImpersonationMarker();
-  mountPage();
+  mountSigningPage();
   await expectPolicySaveDisabled(IMPERSONATION_REASON);
 });
 
@@ -504,14 +528,14 @@ it("enables the channel save exactly for a whole-institution reg/configure/restr
             await screen.findByText("You do not have access to these settings."),
           ).toBeVisible();
           expect(
-            screen.queryByRole("button", { name: "Save configuration" }),
+            screen.queryByRole("button", { name: CHANNEL_SAVE }),
           ).not.toBeInTheDocument();
           cleanup();
           return;
         }
         mountPage();
         const save = await screen.findByRole("button", {
-          name: "Save configuration",
+          name: CHANNEL_SAVE,
         });
         if (expected) await waitFor(() => expect(save).toBeEnabled());
         else await expectSaveRefused(save, BANK_GATE_REASON);
@@ -542,7 +566,7 @@ it("enables the policy save exactly for an organization-scope reg configure row,
             r.sensitivity === "restricted" &&
             r.permission === "configure",
         );
-        mountPage();
+        mountSigningPage();
         const save = await screen.findByRole("button", { name: "Save policy" });
         if (expected) {
           // Authorized is only proven once the save is actually enabled: the
@@ -657,7 +681,7 @@ function resetState() {
   state.authError = false;
   state.impersonating = false;
   state.storedConfig = false;
-  state.reads = { channelConfig: 0, signingPolicies: 0 };
+  state.reads = { channelConfig: 0, signingPolicies: 0, orassAccess: 0 };
   state.writes = [];
 }
 
@@ -681,7 +705,7 @@ function plantImpersonationMarker() {
 }
 
 async function expectChannelSaveDisabled(reason: RegExp) {
-  const save = await screen.findByRole("button", { name: "Save configuration" });
+  const save = await screen.findByRole("button", { name: CHANNEL_SAVE });
   await expectSaveRefused(save, reason);
 }
 

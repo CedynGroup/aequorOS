@@ -1,11 +1,12 @@
 """Authentication routes: login, refresh, current user.
 
 ``users``/``organizations`` are RLS-forced, so a login (which has only an email, no
-tenant context yet) resolves the user through the cross-tenant *system* session
-using the API DATABASE_URL sessionmaker. Its least-privilege cutover is separate
-from the worker cutover (``docs/ops/database-roles.md``). Every authenticated
-request thereafter carries a verified token whose ``org`` claim scopes an ordinary
-tenant session.
+tenant context yet) starts on an unscoped *system* session from the API
+DATABASE_URL sessionmaker. That login does not bypass RLS, so the session learns
+the credential's tenant through the narrow functions in
+:mod:`app.identity.service.pre_tenant` and then enters it; nothing reads across
+tenants. Every authenticated request thereafter carries a verified token whose
+``org`` claim scopes an ordinary tenant session.
 """
 
 from __future__ import annotations
@@ -48,7 +49,13 @@ from app.identity.schemas.auth import (
     TokenResponse,
 )
 from app.identity.schemas.authorization import BindingCreateResponse, EffectiveAuthorityRead
-from app.identity.service import authentication, authorization, grant_administration, sso_config
+from app.identity.service import (
+    authentication,
+    authorization,
+    grant_administration,
+    pre_tenant,
+    sso_config,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -164,6 +171,7 @@ def sso_status(db: SystemDb) -> SsoStatusResponse:
     exists; it discloses only a boolean.
     """
     try:
+        pre_tenant.enter_enabled_sso_organization(db)
         config = sso_config.resolve_client_config(db)
     except HTTPException:
         # >1 enabled connection is a server misconfiguration; the login page
@@ -313,6 +321,7 @@ def sso_client_config(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid internal key."
         )
+    pre_tenant.enter_enabled_sso_organization(db)
     config = sso_config.resolve_client_config(db)
     if config is None:
         return SsoClientConfigResponse(enabled=False)

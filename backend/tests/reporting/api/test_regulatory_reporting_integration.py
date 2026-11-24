@@ -711,7 +711,10 @@ def test_submit_and_poll_gate_on_approval_and_events_start_empty(
 
     poll = real_client.post(f"{base}/poll", headers=validator)
     assert poll.status_code == 409, poll.text
-    assert "submitted" in poll.json()["error"]["message"]
+    # In the officer's words, never the stored status value.
+    message = poll.json()["error"]["message"]
+    assert "not been filed yet" in message
+    assert "'generated'" not in message
 
     events = real_client.get(f"{base}/submission-events", headers=real_headers())
     assert events.status_code == 200

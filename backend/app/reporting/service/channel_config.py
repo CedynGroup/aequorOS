@@ -40,7 +40,7 @@ from app.reporting.service.common import require_actor
 from app.reporting.service.configure_access import require_reporting_configure_access
 from app.services.audit import record_event
 
-CHANNEL_CODES = ("orass_api", "orass_sandbox", "email", "manual")
+CHANNEL_CODES = ("orass_api", "orass_sandbox", "reporting_gateway", "email", "manual")
 
 
 def _read(config: RegulatoryChannelConfig) -> ChannelConfigRead:
@@ -171,6 +171,14 @@ def decrypt_channel_credentials(config: RegulatoryChannelConfig) -> dict[str, An
     )
     credentials = envelope.get("credentials")
     return credentials if isinstance(credentials, dict) else None
+
+
+def store_channel_credentials(
+    config: RegulatoryChannelConfig, bank_id: str, credentials: dict[str, Any]
+) -> None:
+    """Encrypt credentials onto a channel row; the caller audits and commits."""
+    config.credential_ciphertext = _encrypt(bank_id, config.channel, credentials)
+    config.credential_fingerprint = credential_fingerprint(credentials)
 
 
 def _encrypt(bank_id: str, channel: str, credentials: dict[str, Any]) -> str:

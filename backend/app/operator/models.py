@@ -27,7 +27,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin, utc_now
 
-OPERATOR_AUTH_MODES: tuple[str, ...] = ("dev", "oidc", "password")
+#: ``system`` is the staff plane acting on its own schedule (the gateway certificate
+#: check): no person signed in, so the row names the job instead of a staff member.
+OPERATOR_AUTH_MODES: tuple[str, ...] = ("dev", "oidc", "password", "system")
 #: Staff roles, least- to most-privileged: ``developer`` uses every read/desk
 #: surface; ``operator_admin`` additionally manages operator accounts (at or
 #: below its own rank); ``super_admin`` is the unrestricted founder tier —

@@ -127,6 +127,16 @@ def test_operator_app_serves_only_operator_routes() -> None:
         "/operator/v1/regulatory-parameters",
         "/operator/v1/regulatory-parameters",
         "/operator/v1/regulatory-parameters/{param_id}/approve",
+        # Every institution on the AequorOS Reporting Gateway (no tenant: the channel
+        # itself), operator-admin only and audited, refused or not.
+        "/operator/v1/reporting-gateway/institutions",
+        "/operator/v1/reporting-gateway/institutions",
+        "/operator/v1/reporting-gateway/institutions/{code}",
+        "/operator/v1/reporting-gateway/institutions/{code}/clients",
+        "/operator/v1/reporting-gateway/institutions/{code}/clients/{client_id}/revoke",
+        "/operator/v1/reporting-gateway/institutions/{code}/signing-keys",
+        "/operator/v1/reporting-gateway/institutions/{code}/signing-keys/{kid}/retire",
+        "/operator/v1/reporting-gateway/institutions/{code}/status",
         # Cross-tenant health board (GET list) + provisioning (POST) + per-tenant
         # detail reads. The fleet-metadata pair (GET list, GET {org_id} header)
         # stays OPEN; every deeper per-tenant read is gated on an active Tenant
@@ -142,6 +152,14 @@ def test_operator_app_serves_only_operator_routes() -> None:
         "/operator/v1/tenants/{org_id}/banks/{bank_id}/encryption-key/reencrypt",
         "/operator/v1/tenants/{org_id}/banks/{bank_id}/encryption-key/retire",
         "/operator/v1/tenants/{org_id}/banks/{bank_id}/encryption-key/rotate",
+        # Reporting gateway enrolment: read (GET) and enrol, idempotent (POST).
+        # Setup the channel operator performs; banks never handle its keys.
+        "/operator/v1/tenants/{org_id}/banks/{bank_id}/reporting-gateway",
+        # Client certificate renewal: renew or resume now, and cancel an unfinished
+        # renewal before the bank is switched over (both POST, session-gated).
+        "/operator/v1/tenants/{org_id}/banks/{bank_id}/reporting-gateway/certificate-renewal",
+        "/operator/v1/tenants/{org_id}/banks/{bank_id}/reporting-gateway/certificate-renewal/cancel",
+        "/operator/v1/tenants/{org_id}/banks/{bank_id}/reporting-gateway/enrolment",
         # BI mart history walk (session-gated, audited as bi.backfill). Operator-
         # initiated only: the product hooks build forward, nothing builds back,
         # and the cost is the tenant's book depth times the window asked for.

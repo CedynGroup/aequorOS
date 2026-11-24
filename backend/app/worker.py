@@ -66,8 +66,13 @@ from app.models import (
     Job,
     WorkerHeartbeat,
 )
-from app.notifications.service import notification_email_mirror, reporting_deadline_scan
-from app.reporting.public import scan_instrument_statuses
+from app.notifications.service import dispatch as notification_dispatch
+from app.notifications.service import reporting_deadline_scan
+from app.reporting.public import (
+    run_filing_review_reminders,
+    run_regulatory_submission_sync,
+    scan_instrument_statuses,
+)
 from app.services import job_queue, scheduler
 
 logger = logging.getLogger(__name__)
@@ -97,7 +102,9 @@ HANDLERS: dict[str, Handler] = {
     "temenos_pull": temenos_jobs.run_temenos_pull,
     "etl_dedup": etl_dedup_jobs.run_etl_dedup,
     "reporting_deadline_scan": _run_reporting_scan,
-    "notification_email_mirror": notification_email_mirror.run_notification_email_mirror,
+    "notification_dispatch": notification_dispatch.run_notification_dispatch,
+    "regulatory_submission_sync": run_regulatory_submission_sync,
+    "filing_review_reminders": run_filing_review_reminders,
     "database_direct_health": database_direct_jobs.run_database_direct_health,
     "desk_capture": desk_capture_job.run_desk_capture,
     "icaap_ai_draft": icaap_ai_jobs.run_icaap_ai_draft,

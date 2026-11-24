@@ -42,7 +42,6 @@
  "tests.liquidity.service.test_liquidity_cfp_integration -> tests.services.test_le_and_lmt_integration",
  "tests.liquidity.service.test_liquidity_currency_gaps_integration -> tests.services.test_le_and_lmt_integration",
  "tests.notifications.api.test_notification_authorization_integration -> tests.reporting.api.test_package_authorization_integration",
- "tests.notifications.service.test_notification_email_mirror_integration -> tests.reporting.api.test_package_authorization_integration",
  "tests.policy.service.test_regulatory_parameters_p5 -> tests.irrbb.domain.test_sf_fixtures",
  "tests.rating.service.test_implied_rating_run_integration -> tests.bi.service.test_catalogue_parity_integration",
  "tests.reporting.api.test_narrowed_institution_figures_integration -> tests.credit.api.test_credit_authorization_integration",

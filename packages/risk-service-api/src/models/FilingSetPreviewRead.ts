@@ -11,6 +11,13 @@
  */
 
 import { mapValues } from "../runtime";
+import type { GatewayFigureCount } from "./GatewayFigureCount";
+import {
+  GatewayFigureCountFromJSON,
+  GatewayFigureCountFromJSONTyped,
+  GatewayFigureCountToJSON,
+  GatewayFigureCountToJSONTyped,
+} from "./GatewayFigureCount";
 import type { InstitutionCode } from "./InstitutionCode";
 import {
   InstitutionCodeFromJSON,
@@ -18,6 +25,13 @@ import {
   InstitutionCodeToJSON,
   InstitutionCodeToJSONTyped,
 } from "./InstitutionCode";
+import type { ChannelCode } from "./ChannelCode";
+import {
+  ChannelCodeFromJSON,
+  ChannelCodeFromJSONTyped,
+  ChannelCodeToJSON,
+  ChannelCodeToJSONTyped,
+} from "./ChannelCode";
 import type { FilingSetEntryRead } from "./FilingSetEntryRead";
 import {
   FilingSetEntryReadFromJSON,
@@ -47,6 +61,12 @@ import {
 export interface FilingSetPreviewRead {
   /**
    *
+   * @type {ChannelCode}
+   * @memberof FilingSetPreviewRead
+   */
+  channel: ChannelCode;
+  /**
+   *
    * @type {ContentDigest}
    * @memberof FilingSetPreviewRead
    */
@@ -57,6 +77,12 @@ export interface FilingSetPreviewRead {
    * @memberof FilingSetPreviewRead
    */
   filingSet: Array<FilingSetEntryRead>;
+  /**
+   *
+   * @type {GatewayFigureCount}
+   * @memberof FilingSetPreviewRead
+   */
+  gatewayFigureCount?: GatewayFigureCount;
   /**
    *
    * @type {InstitutionCode}
@@ -101,6 +127,7 @@ export interface FilingSetPreviewRead {
 export function instanceOfFilingSetPreviewRead(
   value: object,
 ): value is FilingSetPreviewRead {
+  if (!("channel" in value) || value["channel"] === undefined) return false;
   if (!("contentDigest" in value) || value["contentDigest"] === undefined)
     return false;
   if (!("filingSet" in value) || value["filingSet"] === undefined) return false;
@@ -132,10 +159,15 @@ export function FilingSetPreviewReadFromJSONTyped(
   }
   return {
     ...json,
+    channel: ChannelCodeFromJSON(json["channel"]),
     contentDigest: ContentDigestFromJSON(json["content_digest"]),
     filingSet: (json["filing_set"] as Array<any>).map(
       FilingSetEntryReadFromJSON,
     ),
+    gatewayFigureCount:
+      json["gateway_figure_count"] == null
+        ? undefined
+        : GatewayFigureCountFromJSON(json["gateway_figure_count"]),
     institutionCode: InstitutionCodeFromJSON(json["institution_code"]),
     isFirstFiling: json["is_first_filing"],
     omissions: json["omissions"],
@@ -158,10 +190,12 @@ export function FilingSetPreviewReadToJSONTyped(
   }
 
   return {
+    channel: ChannelCodeToJSON(value["channel"]),
     content_digest: ContentDigestToJSON(value["contentDigest"]),
     filing_set: (value["filingSet"] as Array<any>).map(
       FilingSetEntryReadToJSON,
     ),
+    gateway_figure_count: GatewayFigureCountToJSON(value["gatewayFigureCount"]),
     institution_code: InstitutionCodeToJSON(value["institutionCode"]),
     is_first_filing: value["isFirstFiling"],
     omissions: value["omissions"],

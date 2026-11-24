@@ -1173,7 +1173,7 @@ _FX_NOP_TEMPLATE = ReturnTemplate(
             columns=(
                 ColumnSpec("code", "Currency", "text"),
                 ColumnSpec("side", "Long / Short", "text"),
-                ColumnSpec("net_ccy", "Net Position (FCY '000)", "number"),
+                ColumnSpec("net_ccy", "Net Position (FCY)", "number"),
                 ColumnSpec("spot_ghs", "BoG End-of-Day Rate (GHS)", "number"),
                 ColumnSpec("value", "Net Position (GHS '000)", "ghs"),
                 ColumnSpec("abs_pct_tier1", "|NOP| / NOF (%)", "pct"),
@@ -1271,7 +1271,7 @@ _DBK_DAILY_TEMPLATE = ReturnTemplate(
             columns=(
                 ColumnSpec("code", "Currency", "text"),
                 ColumnSpec("side", "Long / Short", "text"),
-                ColumnSpec("net_ccy", "Net Position (FCY '000)", "number"),
+                ColumnSpec("net_ccy", "Net Position (FCY)", "number"),
                 ColumnSpec("spot_ghs", "BoG End-of-Day Rate (GHS)", "number"),
                 ColumnSpec("value", "Net Position (GHS '000)", "ghs"),
                 ColumnSpec("abs_pct_nof", "|NOP| / NOF (%)", "pct"),
@@ -2826,6 +2826,12 @@ TEMPLATE_REVISIONS: dict[str, int] = {
     "bog-icaap-stress-appendix2-v1": 2,
     "bog-sdi-stress-annual-v1": 2,
     "aeq-stress-pack-v1": 2,
+    # 2026-11-23: the net-position column carries whole FCY units; revision 1 headed
+    # it "(FCY '000)".
+    "bog-fx-nop-v1": 2,
+    # 2026-11-23: the same correction on the daily return, which carries the same FX
+    # run's whole-unit net position.
+    "bog-dbk-daily-v1": 2,
 }
 
 #: Templates whose neutral headers state the minima only through the snapshot's

@@ -15894,6 +15894,7 @@
         "enum": [
           "orass_api",
           "orass_sandbox",
+          "reporting_gateway",
           "email",
           "manual"
         ],
@@ -19181,6 +19182,14 @@
         "title": "DeclaredMethodologyRead",
         "type": "object"
       },
+      "DefaultChannelCode": {
+        "enum": [
+          "reporting_gateway",
+          "orass_api",
+          "manual"
+        ],
+        "type": "string"
+      },
       "DelinquencyBucketRead": {
         "additionalProperties": false,
         "properties": {
@@ -19210,6 +19219,15 @@
         ],
         "title": "DelinquencyBucketRead",
         "type": "object"
+      },
+      "DeliveryStatus": {
+        "enum": [
+          "pending",
+          "sent",
+          "dead",
+          "suppressed"
+        ],
+        "type": "string"
       },
       "DiscoveredColumn": {
         "additionalProperties": false,
@@ -19894,6 +19912,14 @@
         ],
         "title": "EmailFallbackInstructionsRead",
         "type": "object"
+      },
+      "EmailMode": {
+        "enum": [
+          "immediate",
+          "digest",
+          "off"
+        ],
+        "type": "string"
       },
       "EmailRecipientGuidanceRead": {
         "additionalProperties": false,
@@ -21450,6 +21476,195 @@
         ],
         "type": "string"
       },
+      "FilingProfilePut": {
+        "additionalProperties": false,
+        "description": "What every channel shares, set once, and where approved returns go.\n\n``default_channel`` unset means each return follows its registry default.\nThe institution code is not here: it lives on the institution profile.",
+        "properties": {
+          "contact_email": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "pattern": "^[^@\\s]+@[^@\\s]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Email"
+          },
+          "contact_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Name"
+          },
+          "default_channel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultChannelCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reporting_basis": {
+            "$ref": "#/components/schemas/ReportingBasis",
+            "default": "solo"
+          }
+        },
+        "title": "FilingProfilePut",
+        "type": "object"
+      },
+      "FilingProfileRead": {
+        "additionalProperties": false,
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "contact_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Email"
+          },
+          "contact_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Name"
+          },
+          "default_channel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultChannelCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "institution_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution Code"
+          },
+          "orass_ready": {
+            "default": false,
+            "title": "Orass Ready",
+            "type": "boolean"
+          },
+          "reporting_basis": {
+            "$ref": "#/components/schemas/ReportingBasis"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "bank_id",
+          "institution_code",
+          "reporting_basis",
+          "contact_name",
+          "contact_email",
+          "default_channel",
+          "updated_at"
+        ],
+        "title": "FilingProfileRead",
+        "type": "object"
+      },
+      "FilingProfileWriteAcknowledgement": {
+        "additionalProperties": false,
+        "description": "Write-only evidence of a filing-profile write: the submitted values.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "contact_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Email"
+          },
+          "contact_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Name"
+          },
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "default_channel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultChannelCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reporting_basis": {
+            "$ref": "#/components/schemas/ReportingBasis"
+          }
+        },
+        "required": [
+          "bank_id",
+          "reporting_basis",
+          "contact_name",
+          "contact_email",
+          "default_channel",
+          "created"
+        ],
+        "title": "FilingProfileWriteAcknowledgement",
+        "type": "object"
+      },
       "FilingSetEntryRead": {
         "additionalProperties": false,
         "description": "One file the submission would send, as the submission itself resolves it.",
@@ -21513,6 +21728,9 @@
         "additionalProperties": false,
         "description": "What a submission WOULD send, and the gates that already hold.\n\nRead-only: the route mints nothing and transitions nothing. It exists so the\ntransmit confirmation can state the filing set the SUBMISSION resolves \u2014\nwhich is not the package's artifact rows, because the signed revision\nreplaces the unsigned export and a missing filing format is minted on the\nway out.",
         "properties": {
+          "channel": {
+            "$ref": "#/components/schemas/ChannelCode"
+          },
           "content_digest": {
             "anyOf": [
               {
@@ -21530,6 +21748,17 @@
             },
             "title": "Filing Set",
             "type": "array"
+          },
+          "gateway_figure_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Figure Count"
           },
           "institution_code": {
             "anyOf": [
@@ -21578,7 +21807,8 @@
           "content_digest",
           "submission_revision",
           "is_first_filing",
-          "omissions"
+          "omissions",
+          "channel"
         ],
         "title": "FilingSetPreviewRead",
         "type": "object"
@@ -28075,6 +28305,228 @@
           "message"
         ],
         "title": "FxValidationRead",
+        "type": "object"
+      },
+      "GatewayConnectionFacts": {
+        "additionalProperties": false,
+        "description": "The bank's API client on the gateway. Its key never leaves the vault.",
+        "properties": {
+          "automatic_renewal_from": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Automatic Renewal From"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/GatewayEnvironment"
+          },
+          "fingerprint_sha256": {
+            "title": "Fingerprint Sha256",
+            "type": "string"
+          },
+          "renewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renewed At"
+          },
+          "renews_by": {
+            "format": "date-time",
+            "title": "Renews By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "environment",
+          "renews_by",
+          "fingerprint_sha256"
+        ],
+        "title": "GatewayConnectionFacts",
+        "type": "object"
+      },
+      "GatewayConnectionTest": {
+        "additionalProperties": false,
+        "properties": {
+          "gateway_keys": {
+            "title": "Gateway Keys",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "tested_at": {
+            "format": "date-time",
+            "title": "Tested At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "gateway_keys",
+          "tested_at",
+          "message"
+        ],
+        "title": "GatewayConnectionTest",
+        "type": "object"
+      },
+      "GatewayEnvironment": {
+        "enum": [
+          "sandbox",
+          "production"
+        ],
+        "type": "string"
+      },
+      "GatewaySigningKeyFacts": {
+        "additionalProperties": false,
+        "properties": {
+          "algorithm": {
+            "const": "ES256",
+            "title": "Algorithm",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "held_by": {
+            "$ref": "#/components/schemas/SigningKeyHolder"
+          },
+          "kid": {
+            "title": "Kid",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          }
+        },
+        "required": [
+          "kid",
+          "algorithm",
+          "held_by",
+          "created_at",
+          "last_used_at"
+        ],
+        "title": "GatewaySigningKeyFacts",
+        "type": "object"
+      },
+      "GatewayStep": {
+        "additionalProperties": false,
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "key": {
+            "$ref": "#/components/schemas/GatewayStepKey"
+          }
+        },
+        "required": [
+          "key",
+          "done"
+        ],
+        "title": "GatewayStep",
+        "type": "object"
+      },
+      "GatewayStepKey": {
+        "enum": [
+          "enrolled",
+          "signing_key_created",
+          "connection_tested",
+          "first_filing"
+        ],
+        "type": "string"
+      },
+      "GatewayTransmission": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_by_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By Role"
+          },
+          "gateway_status": {
+            "title": "Gateway Status",
+            "type": "string"
+          },
+          "package_id": {
+            "format": "uuid",
+            "title": "Package Id",
+            "type": "string"
+          },
+          "receipt_id": {
+            "title": "Receipt Id",
+            "type": "string"
+          },
+          "reporting_date": {
+            "format": "date",
+            "title": "Reporting Date",
+            "type": "string"
+          },
+          "return_code": {
+            "title": "Return Code",
+            "type": "string"
+          },
+          "sent_at": {
+            "format": "date-time",
+            "title": "Sent At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "package_id",
+          "return_code",
+          "reporting_date",
+          "approved_by_role",
+          "sent_at",
+          "receipt_id",
+          "gateway_status"
+        ],
+        "title": "GatewayTransmission",
         "type": "object"
       },
       "GrantReasonCategory": {
@@ -44791,6 +45243,13 @@
         "title": "LoanGradeBucketRead",
         "type": "object"
       },
+      "LockedBy": {
+        "enum": [
+          "platform",
+          "organisation"
+        ],
+        "type": "string"
+      },
       "LockedConcentrationLimitRead": {
         "additionalProperties": false,
         "properties": {
@@ -47456,6 +47915,241 @@
         "minLength": 1,
         "type": "string"
       },
+      "NotificationCategoryRead": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationEventPreferenceRead"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "events"
+        ],
+        "title": "NotificationCategoryRead",
+        "type": "object"
+      },
+      "NotificationDeliveryListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "deliveries": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationDeliveryRead"
+            },
+            "title": "Deliveries",
+            "type": "array"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deliveries",
+          "total",
+          "counts",
+          "limit",
+          "offset",
+          "has_more"
+        ],
+        "title": "NotificationDeliveryListRead",
+        "type": "object"
+      },
+      "NotificationDeliveryRead": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "event_key": {
+            "title": "Event Key",
+            "type": "string"
+          },
+          "event_label": {
+            "title": "Event Label",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "mode": {
+            "enum": [
+              "immediate",
+              "digest"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "next_attempt_at": {
+            "format": "date-time",
+            "title": "Next Attempt At",
+            "type": "string"
+          },
+          "recipient_name": {
+            "title": "Recipient Name",
+            "type": "string"
+          },
+          "recipient_user_id": {
+            "format": "uuid",
+            "title": "Recipient User Id",
+            "type": "string"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DeliveryStatus"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "id",
+          "event_key",
+          "event_label",
+          "title",
+          "recipient_user_id",
+          "recipient_name",
+          "address",
+          "mode",
+          "status",
+          "attempts",
+          "last_error",
+          "next_attempt_at",
+          "sent_at",
+          "created_at"
+        ],
+        "title": "NotificationDeliveryRead",
+        "type": "object"
+      },
+      "NotificationEventPreferenceRead": {
+        "additionalProperties": false,
+        "description": "One event as the preferences screen shows it to the signed-in person.",
+        "properties": {
+          "choice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default_email": {
+            "$ref": "#/components/schemas/EmailMode"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "email_mode": {
+            "$ref": "#/components/schemas/EmailMode"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "locked_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LockedBy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "description",
+          "default_email",
+          "email_mode",
+          "choice",
+          "locked_by"
+        ],
+        "title": "NotificationEventPreferenceRead",
+        "type": "object"
+      },
       "NotificationListRead": {
         "additionalProperties": false,
         "properties": {
@@ -47498,9 +48192,259 @@
         "title": "NotificationListRead",
         "type": "object"
       },
+      "NotificationOrgSettingsRead": {
+        "additionalProperties": false,
+        "properties": {
+          "digest_hour": {
+            "title": "Digest Hour",
+            "type": "integer"
+          },
+          "email_configured": {
+            "title": "Email Configured",
+            "type": "boolean"
+          },
+          "email_enabled": {
+            "title": "Email Enabled",
+            "type": "boolean"
+          },
+          "escalate_after_hours": {
+            "title": "Escalate After Hours",
+            "type": "integer"
+          },
+          "policies": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationPolicyRead"
+            },
+            "title": "Policies",
+            "type": "array"
+          },
+          "reminder_after_hours": {
+            "title": "Reminder After Hours",
+            "type": "integer"
+          },
+          "reminders_enabled": {
+            "title": "Reminders Enabled",
+            "type": "boolean"
+          },
+          "time_zone": {
+            "title": "Time Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email_configured",
+          "email_enabled",
+          "time_zone",
+          "digest_hour",
+          "reminders_enabled",
+          "reminder_after_hours",
+          "escalate_after_hours",
+          "policies"
+        ],
+        "title": "NotificationOrgSettingsRead",
+        "type": "object"
+      },
+      "NotificationOrgSettingsUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "digest_hour": {
+            "title": "Digest Hour",
+            "type": "integer"
+          },
+          "email_enabled": {
+            "title": "Email Enabled",
+            "type": "boolean"
+          },
+          "escalate_after_hours": {
+            "title": "Escalate After Hours",
+            "type": "integer"
+          },
+          "policies": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/NotificationPolicyUpdate"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "default": {},
+            "title": "Policies",
+            "type": "object"
+          },
+          "reminder_after_hours": {
+            "title": "Reminder After Hours",
+            "type": "integer"
+          },
+          "reminders_enabled": {
+            "title": "Reminders Enabled",
+            "type": "boolean"
+          },
+          "time_zone": {
+            "title": "Time Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email_enabled",
+          "time_zone",
+          "digest_hour",
+          "reminders_enabled",
+          "reminder_after_hours",
+          "escalate_after_hours"
+        ],
+        "title": "NotificationOrgSettingsUpdate",
+        "type": "object"
+      },
+      "NotificationPolicyRead": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "default_email": {
+            "$ref": "#/components/schemas/EmailMode"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "email_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "locked": {
+            "title": "Locked",
+            "type": "boolean"
+          },
+          "platform_locked": {
+            "title": "Platform Locked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "description",
+          "category",
+          "default_email",
+          "platform_locked",
+          "email_mode",
+          "locked"
+        ],
+        "title": "NotificationPolicyRead",
+        "type": "object"
+      },
+      "NotificationPolicyUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "email_mode": {
+            "$ref": "#/components/schemas/EmailMode"
+          },
+          "locked": {
+            "title": "Locked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "email_mode",
+          "locked"
+        ],
+        "title": "NotificationPolicyUpdate",
+        "type": "object"
+      },
+      "NotificationPreferencesRead": {
+        "additionalProperties": false,
+        "properties": {
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationCategoryRead"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "digest_hour": {
+            "title": "Digest Hour",
+            "type": "integer"
+          },
+          "email_configured": {
+            "title": "Email Configured",
+            "type": "boolean"
+          },
+          "email_enabled": {
+            "title": "Email Enabled",
+            "type": "boolean"
+          },
+          "time_zone": {
+            "title": "Time Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email_configured",
+          "email_enabled",
+          "digest_hour",
+          "time_zone",
+          "categories"
+        ],
+        "title": "NotificationPreferencesRead",
+        "type": "object"
+      },
+      "NotificationPreferencesUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "choices": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EmailMode"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Choices",
+            "type": "object"
+          }
+        },
+        "required": [
+          "choices"
+        ],
+        "title": "NotificationPreferencesUpdate",
+        "type": "object"
+      },
       "NotificationRead": {
         "additionalProperties": false,
         "properties": {
+          "action_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Path"
+          },
           "body": {
             "title": "Body",
             "type": "string"
@@ -47531,6 +48475,17 @@
               }
             ],
             "title": "Entity Type"
+          },
+          "event_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Key"
           },
           "id": {
             "format": "uuid",
@@ -51976,6 +52931,243 @@
         "title": "RefreshRequest",
         "type": "object"
       },
+      "RegulatorQueryFilingRead": {
+        "additionalProperties": false,
+        "description": "The bank's own return the query is about, when the receipt is one it filed.",
+        "properties": {
+          "package_id": {
+            "format": "uuid",
+            "title": "Package Id",
+            "type": "string"
+          },
+          "reporting_date": {
+            "format": "date",
+            "title": "Reporting Date",
+            "type": "string"
+          },
+          "return_code": {
+            "title": "Return Code",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "package_id",
+          "return_code",
+          "reporting_date",
+          "version"
+        ],
+        "title": "RegulatorQueryFilingRead",
+        "type": "object"
+      },
+      "RegulatorQueryListRead": {
+        "additionalProperties": false,
+        "description": "The regulator's queries, read live from the AequorOS Reporting Gateway.\n\n``connected`` is false when the bank is not enrolled on the gateway; ``message``\nthen (or when the gateway could not be reached) says what to do.",
+        "properties": {
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RegulatorQueryRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "read_at": {
+            "format": "date-time",
+            "title": "Read At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connected",
+          "items",
+          "message",
+          "read_at"
+        ],
+        "title": "RegulatorQueryListRead",
+        "type": "object"
+      },
+      "RegulatorQueryMessageRead": {
+        "additionalProperties": false,
+        "properties": {
+          "author": {
+            "enum": [
+              "supervisor",
+              "institution",
+              "system"
+            ],
+            "title": "Author",
+            "type": "string"
+          },
+          "author_label": {
+            "title": "Author Label",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "author_label",
+          "body",
+          "created_at"
+        ],
+        "title": "RegulatorQueryMessageRead",
+        "type": "object"
+      },
+      "RegulatorQueryRead": {
+        "additionalProperties": false,
+        "properties": {
+          "acknowledged_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledged At"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "filing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RegulatorQueryFilingRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "enum": [
+              "query",
+              "resubmission"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/RegulatorQueryMessageRead"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "number": {
+            "title": "Number",
+            "type": "string"
+          },
+          "opened_at": {
+            "format": "date-time",
+            "title": "Opened At",
+            "type": "string"
+          },
+          "receipt_id": {
+            "title": "Receipt Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RegulatorQueryStatus"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          }
+        },
+        "required": [
+          "number",
+          "kind",
+          "subject",
+          "status",
+          "receipt_id",
+          "due_at",
+          "opened_at",
+          "acknowledged_at",
+          "messages",
+          "filing"
+        ],
+        "title": "RegulatorQueryRead",
+        "type": "object"
+      },
+      "RegulatorQueryResponseCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "resubmission_receipt_id": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resubmission Receipt Id"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "RegulatorQueryResponseCreate",
+        "type": "object"
+      },
+      "RegulatorQueryStatus": {
+        "enum": [
+          "awaiting_institution",
+          "awaiting_supervisor",
+          "closed"
+        ],
+        "type": "string"
+      },
       "RegulatoryArtifactListRead": {
         "additionalProperties": false,
         "properties": {
@@ -54346,12 +55538,121 @@
         "title": "ReportScore",
         "type": "object"
       },
+      "ReportingBasis": {
+        "enum": [
+          "solo",
+          "consolidated"
+        ],
+        "type": "string"
+      },
       "ReportingDateSource": {
         "enum": [
           "regulator_anchor",
           "computed_snapshot"
         ],
         "type": "string"
+      },
+      "ReportingGatewayStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "connection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GatewayConnectionFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enrolled": {
+            "title": "Enrolled",
+            "type": "boolean"
+          },
+          "enrolled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enrolled At"
+          },
+          "institution_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Institution Code"
+          },
+          "last_connection_test_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Connection Test At"
+          },
+          "last_connection_test_ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Connection Test Ok"
+          },
+          "signing_key": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GatewaySigningKeyFacts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/GatewayStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "transmissions": {
+            "items": {
+              "$ref": "#/components/schemas/GatewayTransmission"
+            },
+            "title": "Transmissions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enrolled",
+          "institution_code",
+          "enrolled_at",
+          "connection",
+          "signing_key",
+          "last_connection_test_at",
+          "last_connection_test_ok",
+          "steps",
+          "transmissions"
+        ],
+        "title": "ReportingGatewayStatus",
+        "type": "object"
       },
       "ReportingObligationListRead": {
         "additionalProperties": false,
@@ -58692,6 +59993,13 @@
         ],
         "title": "SignerIdentityRead",
         "type": "object"
+      },
+      "SigningKeyHolder": {
+        "enum": [
+          "aequoros_vault",
+          "bank_key_service"
+        ],
+        "type": "string"
       },
       "SigningPolicyRead": {
         "additionalProperties": false,
@@ -109023,6 +110331,7 @@
               "enum": [
                 "orass_api",
                 "orass_sandbox",
+                "reporting_gateway",
                 "email",
                 "manual"
               ],
@@ -109134,6 +110443,7 @@
               "enum": [
                 "orass_api",
                 "orass_sandbox",
+                "reporting_gateway",
                 "email",
                 "manual"
               ],
@@ -109230,6 +110540,831 @@
           }
         ],
         "summary": "Put Channel Config",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-reporting/filing-profile": {
+      "get": {
+        "description": "How the bank files: the shared reporting basis and contact, the institution\ncode from its institution profile, and the default channel for approved returns.",
+        "operationId": "getFilingProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilingProfileRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Filing Profile",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      },
+      "put": {
+        "description": "Set the filing profile and default channel (exact reg/configure/restricted\nauthority for this bank). A channel the bank is not connected to is refused.",
+        "operationId": "putFilingProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilingProfilePut"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilingProfileWriteAcknowledgement"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Filing Profile",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-reporting/regulator-queries": {
+      "get": {
+        "description": "The regulator's queries on the bank's filings, read live from the gateway.\n\nEvery query and its whole thread, newest first, each linked to the bank's own\nreturn when the receipt is one this bank filed.",
+        "operationId": "listRegulatorQueries",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegulatorQueryListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Regulator Queries",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-reporting/regulator-queries/{number}/acknowledgement": {
+      "post": {
+        "description": "Tell the regulator the query has reached the bank (shown to the supervisor).",
+        "operationId": "acknowledgeRegulatorQuery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "pattern": "^QRY-\\d{4}-\\d{4,}$",
+              "title": "Number",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Acknowledge Regulator Query",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-reporting/regulator-queries/{number}/correction": {
+      "post": {
+        "description": "Open the correction the regulator asked for; the return goes back to its preparer.\n\nTransmitting the corrected version files an amendment, and AequorOS then answers\nthe regulator's request with the new receipt.",
+        "operationId": "startRegulatorRequestedCorrection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "pattern": "^QRY-\\d{4}-\\d{4,}$",
+              "title": "Number",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResubmissionRequestRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Regulator Requested Correction",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-reporting/regulator-queries/{number}/responses": {
+      "post": {
+        "description": "Send the bank's reply to the regulator: the transmitting officer's act.",
+        "operationId": "respondToRegulatorQuery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "number",
+            "required": true,
+            "schema": {
+              "pattern": "^QRY-\\d{4}-\\d{4,}$",
+              "title": "Number",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegulatorQueryResponseCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegulatorQueryMessageRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Respond To Regulator Query",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-reporting/reporting-gateway": {
+      "get": {
+        "description": "The bank's AequorOS Reporting Gateway connection: enrolment steps, connection,\nsignature key facts and recent transmissions. Enrolment is carried out by the\nchannel operator; this never returns key material.",
+        "operationId": "getReportingGatewayStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportingGatewayStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Reporting Gateway Status",
+        "tags": [
+          "regulatory-reporting"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/regulatory-reporting/reporting-gateway/connection-test": {
+      "post": {
+        "description": "Obtain a gateway token and its keys without filing anything.",
+        "operationId": "testReportingGatewayConnection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GatewayConnectionTest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Test Reporting Gateway Connection",
         "tags": [
           "regulatory-reporting"
         ]
@@ -125274,6 +127409,411 @@
         ]
       }
     },
+    "/api/v1/notifications/deliveries": {
+      "get": {
+        "operationId": "listNotificationDeliveries",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/DeliveryStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationDeliveryListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Notification Deliveries",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/notifications/deliveries/{delivery_id}/retry": {
+      "post": {
+        "operationId": "retryNotificationDelivery",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "delivery_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Delivery Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationDeliveryRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retry Notification Delivery",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/notifications/preferences": {
+      "get": {
+        "operationId": "getNotificationPreferences",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferencesRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Notification Preferences",
+        "tags": [
+          "notifications"
+        ]
+      },
+      "put": {
+        "operationId": "updateNotificationPreferences",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationPreferencesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferencesRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Notification Preferences",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
     "/api/v1/notifications/read-all": {
       "post": {
         "operationId": "markAllNotificationsRead",
@@ -125355,6 +127895,186 @@
           }
         ],
         "summary": "Mark All Notifications Read",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/notifications/settings": {
+      "get": {
+        "operationId": "getNotificationSettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationOrgSettingsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Notification Settings",
+        "tags": [
+          "notifications"
+        ]
+      },
+      "put": {
+        "operationId": "updateNotificationSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationOrgSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationOrgSettingsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Notification Settings",
         "tags": [
           "notifications"
         ]

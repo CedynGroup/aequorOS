@@ -83,6 +83,7 @@ import type {
   TemenosConnectionCreate,
   TemenosConnectionUpdate,
   WhatIfShockCode,
+  FilingProfilePut,
 } from "@aequoros/risk-service-api";
 import { FeatureFlagsApi } from "@aequoros/risk-service-api";
 import { cfpContentToWire } from "./cfp";
@@ -3333,6 +3334,210 @@ export function useSaveChannelConfig(bankId: string | undefined) {
       void queryClient.invalidateQueries({
         queryKey: ["rr-channel-config", bankId, channel],
       });
+    },
+  });
+}
+
+/**
+ * The bank's connection to the AequorOS Reporting Gateway (read-only for banks:
+ * AequorOS enrols each bank). Restricted configuration, like channel configs,
+ * so the caller asks for the reg/restricted view first.
+ */
+export function useReportingGatewayStatus(
+  bankId: string | undefined,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ["rr-reporting-gateway", bankId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.getReportingGatewayStatus({ bankId: bankId! }),
+      ),
+    enabled: Boolean(bankId) && options?.enabled !== false,
+    retry: false,
+  });
+}
+
+/** A token and the gateway's keys, nothing filed; refreshes the status. */
+export function useTestReportingGatewayConnection(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.testReportingGatewayConnection({ bankId: bankId! }),
+      ),
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["rr-reporting-gateway", bankId],
+      });
+    },
+  });
+}
+
+/**
+ * The regulator's queries on the bank's filings, read live from the AequorOS
+ * Reporting Gateway. Polled every minute while the page is open, so a new query
+ * from the supervisor appears without a reload.
+ */
+export function useRegulatorQueries(
+  bankId: string | undefined,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ["rr-regulator-queries", bankId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.listRegulatorQueries({ bankId: bankId! }),
+      ),
+    enabled: Boolean(bankId) && options?.enabled !== false,
+    refetchInterval: 60_000,
+    retry: false,
+  });
+}
+
+/** Tell the regulator the query reached the bank (the supervisor sees this). */
+export function useAcknowledgeRegulatorQuery(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (number: string) =>
+      apiCall(() =>
+        regulatoryReportingApi.acknowledgeRegulatorQuery({
+          bankId: bankId!,
+          number,
+        }),
+      ),
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["rr-regulator-queries", bankId],
+      });
+    },
+  });
+}
+
+/**
+ * Open the correction the regulator asked for: the return goes back to its
+ * preparer, with the regulator's words as the reason. The transmitting officer's act.
+ */
+export function useStartRegulatorCorrection(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (number: string) =>
+      apiCall(() =>
+        regulatoryReportingApi.startRegulatorRequestedCorrection({
+          bankId: bankId!,
+          number,
+        }),
+      ),
+    onSettled: (request) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["rr-regulator-queries", bankId],
+      });
+      if (request) {
+        void queryClient.invalidateQueries({
+          queryKey: ["rr-resubmissions", bankId, request.packageId],
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["rr-package", bankId, request.packageId],
+        });
+      }
+    },
+  });
+}
+
+/** Send the bank's reply to the regulator: the transmitting officer's act. */
+export function useRespondToRegulatorQuery(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      number: string;
+      body: string;
+      resubmissionReceiptId?: string | null;
+    }) =>
+      apiCall(() =>
+        regulatoryReportingApi.respondToRegulatorQuery({
+          bankId: bankId!,
+          number: input.number,
+          regulatorQueryResponseCreate: {
+            body: input.body,
+            resubmissionReceiptId: input.resubmissionReceiptId ?? null,
+          },
+        }),
+      ),
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["rr-regulator-queries", bankId],
+      });
+    },
+  });
+}
+
+/** How the bank files: shared basis and contact, plus the default channel. */
+export function useFilingProfile(
+  bankId: string | undefined,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ["rr-filing-profile", bankId],
+    queryFn: () =>
+      apiCall(() => regulatoryReportingApi.getFilingProfile({ bankId: bankId! })),
+    enabled: Boolean(bankId) && options?.enabled !== false,
+    retry: false,
+  });
+}
+
+/** Save the filing profile; the stored read comes back through the GET. */
+export function useSaveFilingProfile(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (filingProfilePut: FilingProfilePut) =>
+      apiCall(() =>
+        regulatoryReportingApi.putFilingProfile({
+          bankId: bankId!,
+          filingProfilePut,
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["rr-filing-profile", bankId],
+      });
+      // A bank-scoped template list reports the channel the bank's returns use.
+      void queryClient.invalidateQueries({ queryKey: ["rr-templates", bankId] });
+    },
+  });
+}
+
+/** The bank's agreed deadline extensions: `{ returnCode: dayOfMonth }`. */
+export function useReportingSettings(
+  bankId: string | undefined,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ["rr-reporting-settings", bankId],
+    queryFn: () =>
+      apiCall(() =>
+        regulatoryReportingApi.getReportingSettings({ bankId: bankId! }),
+      ),
+    enabled: Boolean(bankId) && options?.enabled !== false,
+    retry: false,
+  });
+}
+
+/** Replace the deadline overrides; calendar due dates move with them. */
+export function useSaveReportingSettings(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (deadlineOverrides: Record<string, number>) =>
+      apiCall(() =>
+        regulatoryReportingApi.putReportingSettings({
+          bankId: bankId!,
+          reportingSettingsPut: { deadlineOverrides },
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["rr-reporting-settings", bankId],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["rr-obligations"] });
     },
   });
 }

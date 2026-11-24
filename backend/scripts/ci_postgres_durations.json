@@ -368,7 +368,6 @@
     "tests/market_data/service/test_operating_environment_integration.py": 0.161,
     "tests/models/test_nullable_json_is_sql_null_integration.py": 0.022,
     "tests/notifications/api/test_notification_authorization_integration.py": 5.833,
-    "tests/notifications/service/test_notification_email_mirror_integration.py": 0.276,
     "tests/notifications/service/test_notifications_integration.py": 7.943,
     "tests/operator/test_audit_api_integration.py": 1.255,
     "tests/operator/test_audit_log_integration.py": 1.562,

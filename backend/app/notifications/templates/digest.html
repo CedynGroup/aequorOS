@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block preheader %}{{ preheader }}{% endblock %}
+{% block content %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr><td style="height:4px;background-color:#3B6FE0;font-size:0;line-height:0;">&nbsp;</td></tr>
+  <tr>
+    <td style="padding:28px 32px 4px 32px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+      <div style="font-size:12px;line-height:16px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#3B6FE0;">Daily summary · {{ period_label }}</div>
+      <h1 style="margin:10px 0 0 0;font-size:22px;line-height:30px;font-weight:600;color:#0B1220;">{{ title }}</h1>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding:12px 32px 0 32px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:24px;color:#2A3447;">
+      <p style="margin:0;">{{ greeting }} here is everything you chose to receive as a summary.</p>
+    </td>
+  </tr>
+  {% for section in sections %}
+  <tr>
+    <td style="padding:24px 32px 0 32px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+      <div style="font-size:13px;line-height:18px;font-weight:bold;color:#0B1220;border-bottom:1px solid #E3E7EF;padding-bottom:8px;">{{ section.title }}</div>
+      {% for item in section.items %}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;">
+        <tr>
+          <td style="width:4px;background-color:{{ accents[item.severity] }};border-radius:2px;font-size:0;">&nbsp;</td>
+          <td style="padding:2px 0 2px 12px;">
+            <div style="font-size:14px;line-height:20px;font-weight:600;color:#0B1220;">
+              {% if item.message.action %}<a href="{{ branding.url(item.message.action.path) }}" style="color:#0B1220;text-decoration:none;">{{ item.message.title }}</a>{% else %}{{ item.message.title }}{% endif %}
+            </div>
+            <div style="font-size:13px;line-height:20px;color:#4A5568;margin-top:2px;">{{ item.message.summary }}</div>
+          </td>
+        </tr>
+      </table>
+      {% endfor %}
+    </td>
+  </tr>
+  {% endfor %}
+  <tr>
+    <td style="padding:28px 32px 4px 32px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="background-color:#3B6FE0;border-radius:8px;">
+            <a href="{{ branding.url('/notifications') }}" style="display:inline-block;padding:12px 22px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:20px;font-weight:600;color:#FFFFFF;text-decoration:none;">Open your notifications &rarr;</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr><td style="height:28px;font-size:0;line-height:0;">&nbsp;</td></tr>
+</table>
+{% endblock %}
+{% block footer_reason %}You received this summary because you chose daily summaries for some notifications.<br>{% endblock %}

@@ -64,6 +64,7 @@ from app.reporting.schemas.filing_workflow import (
     PackageStageDecisionRead,
     PackageStageRead,
 )
+from app.reporting.service import filing_notifications
 from app.reporting.service.filing_workflow import engine, templates
 from app.reporting.service.filing_workflow.errors import conflict, not_found
 from app.services.audit import record_event
@@ -236,6 +237,16 @@ def _decision_blocker(state: ChainState, seq: int, actor: str | None) -> str | N
             ),
         ),
     )
+
+
+def decision_blocker_for(state: ChainState, seq: int, user_id: UUID) -> str | None:
+    """Why ``user_id`` may not decide stage ``seq`` (``None`` when they may).
+
+    The maker-checker half of the decision route's test, asked about somebody
+    other than the caller — the notification platform uses it to find who a
+    stage is waiting on.
+    """
+    return _decision_blocker(state, seq, str(user_id))
 
 
 # ---------------------------------------------------------------------------
@@ -555,6 +566,7 @@ def start_chain(
     package.current_stage_seq = min(2, len(stages))
     refreshed = load_state(db, ctx, package)
     apply_projection(db, ctx, refreshed)
+    filing_notifications.stage_entered(db, ctx, package, note=note)
     return load_state(db, ctx, package)
 
 
@@ -641,6 +653,7 @@ def decide(
             review_digest_value=state.review_digest,
             comment=payload.comment,
         )
+        filing_notifications.stage_approved(db, ctx, package, stage, comment=payload.comment)
         # DELIBERATELY NO ADVANCE. Approving and handing on are two acts
         # (founder decision 2026-09-20): the officer approves, and then sends
         # the return to the next stage — or, at the transmitting stage, files
@@ -700,10 +713,13 @@ def hand_off(db: Session, ctx: TenantContext, package: RegulatoryPackage) -> Cha
             "Approve this return before sending it on.",
             stage_seq=stage.seq,
         )
-    if stage.seq < len(state.stages):
+    advanced = stage.seq < len(state.stages)
+    if advanced:
         package.current_stage_seq = stage.seq + 1
     refreshed = load_state(db, ctx, package)
     apply_projection(db, ctx, refreshed)
+    if advanced:
+        filing_notifications.stage_entered(db, ctx, package)
     return load_state(db, ctx, package)
 
 
@@ -739,6 +755,9 @@ def _send_back(  # noqa: PLR0913 - the send-back is its six named parts
     package.current_stage_seq = target
     refreshed = load_state(db, ctx, package)
     apply_projection(db, ctx, refreshed)
+    filing_notifications.sent_back(
+        db, ctx, package, from_stage=stage, target_seq=target, comment=payload.comment
+    )
     return load_state(db, ctx, package)
 
 
@@ -783,6 +802,7 @@ def record_stage_approval(
         comment=comment,
         actor=actor,
     )
+    filing_notifications.stage_approved(db, ctx, package, stage, comment=comment)
     return row
 
 

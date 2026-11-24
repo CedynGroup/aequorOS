@@ -267,15 +267,19 @@ def upgrade() -> None:
         op.add_column(
             "bank_encryption_keys", sa.Column(name, postgresql.UUID(as_uuid=True), nullable=True)
         )
-        op.create_foreign_key(
-            "fk_bank_" + ("current" if name == "current_version_id" else "index") + "_version",
-            "bank_encryption_keys",
-            "object_key_envelopes",
-            [name, "bank_id", "organization_id"],
-            ["id", "bank_id", "organization_id"],
-            deferrable=True,
-            initially="DEFERRED",
-        )
+    # Adding a foreign key validates existing rows with a query that forced RLS
+    # would filter (or refuse under row_security=off), so validate as the owner.
+    with force_rls_suspended(connection, "bank_encryption_keys", "object_key_envelopes"):
+        for name in ("current_version_id", "index_version_id"):
+            op.create_foreign_key(
+                "fk_bank_" + ("current" if name == "current_version_id" else "index") + "_version",
+                "bank_encryption_keys",
+                "object_key_envelopes",
+                [name, "bank_id", "organization_id"],
+                ["id", "bank_id", "organization_id"],
+                deferrable=True,
+                initially="DEFERRED",
+            )
     with force_rls_suspended(
         connection,
         "bank_encryption_keys",

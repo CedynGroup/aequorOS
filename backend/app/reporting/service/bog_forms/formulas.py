@@ -85,6 +85,23 @@ def expand_range(a: str, b: str) -> list[str]:
     return [f"{get_column_letter(c)}{r}" for r in range(r0, r1 + 1) for c in range(c0, c1 + 1)]
 
 
+def _scan(text: str) -> list[tuple[str, str]]:
+    """``(kind, text)`` tokens of a formula body, whitespace dropped."""
+    out: list[tuple[str, str]] = []
+    pos = 0
+    while pos < len(text):
+        m = _TOKEN.match(text, pos)
+        if not m:
+            msg = f"unsupported formula syntax at {text[pos : pos + 12]!r} in {text!r}"
+            raise UnsupportedFormulaError(msg)
+        pos = m.end()
+        kind = m.lastgroup
+        if kind == "ws":
+            continue
+        out.append((kind or "", m.group(0)))
+    return out
+
+
 class _Parser:
     """Recursive-descent parser → evaluates directly (the grammar is tiny)."""
 
@@ -95,19 +112,7 @@ class _Parser:
 
     @staticmethod
     def _tokenize(text: str) -> list[tuple[str, str]]:
-        out: list[tuple[str, str]] = []
-        pos = 0
-        while pos < len(text):
-            m = _TOKEN.match(text, pos)
-            if not m:
-                msg = f"unsupported formula syntax at {text[pos : pos + 12]!r} in {text!r}"
-                raise UnsupportedFormulaError(msg)
-            pos = m.end()
-            kind = m.lastgroup
-            if kind == "ws":
-                continue
-            out.append((kind or "", m.group(0)))
-        return out
+        return _scan(text)
 
     def peek(self) -> tuple[str, str] | None:
         return self.tokens[self.i] if self.i < len(self.tokens) else None
@@ -293,6 +298,23 @@ def evaluate(
     if parser.peek() is not None:
         raise UnsupportedFormulaError(f"trailing tokens in {formula!r}")
     return value
+
+
+def tokenize(formula: str) -> list[tuple[str, str]]:
+    """The tokens of ``formula`` (without its leading ``=``), whitespace dropped.
+
+    Exposed for readers that analyse a template formula without evaluating it
+    (the AequorOS Reporting Gateway catalogue derives its arithmetic checks from
+    the linear ones). Raises :class:`UnsupportedFormulaError` like the parser.
+    """
+    text = formula[1:] if formula.startswith("=") else formula
+    return _scan(text)
+
+
+def split_reference(token: str) -> CellRef:
+    """A ``ref``/``range`` token's sheet, cell (or ``A1:B2`` range) and workbook link."""
+    sheet, ref, external = _split_sheet(token)
+    return CellRef(sheet, ref, external)
 
 
 #: Resolver for cross-FORM links: ``(external_index, sheet, ref) -> value``.

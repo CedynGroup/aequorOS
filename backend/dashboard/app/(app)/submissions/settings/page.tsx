@@ -1,747 +1,283 @@
 "use client";
 
 /**
- * Regulatory Reporting — Settings. Per-channel submission configuration:
- * institution code, contacts, reporting basis, the ORASS API endpoint
- * (base URL / auth mode / timeout / TLS from the regulator onboarding pack),
- * the ORASS sandbox behavior (ack / reject / slow / decline + downtime and
- * resubmission toggles for demoing the fallback + correction workflows),
- * the ORASS portal principal user, the email downtime recipient, and
- * write-only ORASS credentials (the API returns only the fingerprint —
- * mirroring the market-data vault pattern).
- *
- * Plus the signing-policy section (who must sign which return —
- * docs/attestation_esignature.md §4.5), whose save is gated on
- * organization-scope REG configure authority (VAL-CFG-008).
+ * Regulatory Reporting → Settings: how this bank files. One surface for the
+ * filing profile every channel shares, where approved returns go, the state of
+ * each submission channel, signing and deadlines. Each section links to its
+ * own page; nothing here edits configuration directly.
  */
 
-import PageContainer from "@/components/ui/PageContainer";
-import { useEffect, useId, useState } from "react";
-import { FlaskConical, KeyRound, Loader2, Save } from "lucide-react";
-import type {
-  ChannelCode,
-  ChannelConfigRead,
-} from "@aequoros/risk-service-api";
-import PageHeader from "@/components/ui/PageHeader";
+import Link from "next/link";
+import type { ReactNode } from "react";
+import { ArrowRight, Mail, NotebookPen, RadioTower, Server } from "lucide-react";
+import { useBankContext } from "@/components/shell/BankContext";
+import { SettingsHeading } from "@/components/submissions/settings/SettingsChrome";
+import { DeniedSettings } from "@/components/submissions/settings/DeniedSettings";
+import {
+  defaultChannelLabel,
+  profileFacts,
+} from "@/components/submissions/settings/FilingProfileForm";
 import SectionCard from "@/components/ui/SectionCard";
-import StatusPill from "@/components/ui/StatusPill";
+import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { SkeletonCard } from "@/components/ui/Skeleton";
-import { useBankContext } from "@/components/shell/BankContext";
 import {
   isChannelConfigMissingError,
+  useReportingGatewayStatus,
   useChannelConfig,
-  useSaveChannelConfig,
+  useFilingProfile,
+  useReportingSettings,
+  useSigningPolicies,
 } from "@/lib/api/hooks";
-import { fmtTimestamp, shortId } from "@/lib/api/values";
-import { CHANNEL_LABELS } from "@/components/submissions/shared";
-import SigningPolicyPanel from "@/components/attestation/SigningPolicyPanel";
-import { useConfigureEligibility, useViewEligibility } from "@/lib/api/configureAccess";
-import { regShort } from "@/lib/format";
+import {
+  useOrganizationViewEligibility,
+  useViewEligibility,
+} from "@/lib/api/configureAccess";
+import { fmtTimestamp } from "@/lib/api/values";
+import { centralBankName, regShort } from "@/lib/format";
 
-const CHANNELS: ChannelCode[] = [
-  "orass_api",
-  "orass_sandbox",
-  "email",
-  "manual",
-];
+const BASE = "/submissions/settings";
 
-const SANDBOX_BEHAVIORS = [
-  { value: "ack", label: "Acknowledge (happy path)" },
-  {
-    value: "reject",
-    label: "Reject (simulated server-side validation failure)",
-  },
-  { value: "slow", label: "Slow (pending for two polls, then acknowledge)" },
-  {
-    value: "decline",
-    label: "Decline (terminal supervisor refusal with comments)",
-  },
-];
-
-const RESUBMISSION_BEHAVIORS = [
-  { value: "grant", label: "Grant resubmission requests" },
-  { value: "deny", label: "Deny resubmission requests" },
-];
-
-const AUTH_MODES = [
-  { value: "api_key", label: "API key" },
-  { value: "basic", label: "Basic (username + password)" },
-];
-
-const BASIS_OPTIONS = [
-  { value: "solo", label: "Solo (standalone licensed entity)" },
-  { value: "consolidated", label: "Consolidated (banking group)" },
-];
-
-type FormState = {
-  institutionCode: string;
-  contactName: string;
-  contactEmail: string;
-  reportingBasis: string;
-  sandboxBehavior: string;
-  resubmissionBehavior: string;
-  downtime: boolean;
-  fallbackRecipient: string;
-  apiBaseUrl: string;
-  authMode: string;
-  timeoutSeconds: string;
-  verifyTls: boolean;
-  principalUserName: string;
-  principalUserEmail: string;
-  username: string;
-  password: string;
-  apiKey: string;
+type ChannelRow = {
+  label: string;
+  status: { label: string; tone: StatusTone };
+  detail: string;
+  href: string;
+  icon: ReactNode;
 };
 
-const EMPTY_FORM: FormState = {
-  institutionCode: "",
-  contactName: "",
-  contactEmail: "",
-  reportingBasis: "solo",
-  sandboxBehavior: "ack",
-  resubmissionBehavior: "grant",
-  downtime: false,
-  fallbackRecipient: "",
-  apiBaseUrl: "",
-  authMode: "api_key",
-  timeoutSeconds: "",
-  verifyTls: true,
-  principalUserName: "",
-  principalUserEmail: "",
-  username: "",
-  password: "",
-  apiKey: "",
-};
-
-function formFromConfig(config: ChannelConfigRead | undefined): FormState {
-  if (!config) return EMPTY_FORM;
-  const raw = config.config as Record<string, unknown>;
-  return {
-    ...EMPTY_FORM,
-    institutionCode: String(raw.institution_code ?? ""),
-    contactName: String(raw.contact_name ?? ""),
-    contactEmail: String(raw.contact_email ?? ""),
-    reportingBasis: String(raw.reporting_basis ?? "solo"),
-    sandboxBehavior: String(raw.sandbox_behavior ?? "ack"),
-    resubmissionBehavior: String(raw.resubmission_behavior ?? "grant"),
-    downtime: raw.downtime === true,
-    fallbackRecipient: String(raw.fallback_recipient ?? ""),
-    apiBaseUrl: String(raw.api_base_url ?? ""),
-    authMode: String(raw.auth_mode ?? "api_key"),
-    timeoutSeconds:
-      raw.timeout_seconds == null ? "" : String(raw.timeout_seconds),
-    verifyTls: raw.verify_tls !== false,
-    principalUserName: String(raw.principal_user_name ?? ""),
-    principalUserEmail: String(raw.principal_user_email ?? ""),
-  };
-}
-
-export default function SettingsPage() {
+export default function ReportingSettingsOverview() {
   const { bank } = useBankContext();
   const bankId = bank?.id;
-  const [channel, setChannel] = useState<ChannelCode>("orass_sandbox");
+  const { allowed: canView, reason: viewReason } = useViewEligibility(bankId, "reg");
+  const profileQuery = useFilingProfile(bankId, { enabled: canView });
+  const gatewayQuery = useReportingGatewayStatus(bankId, { enabled: canView });
+  const orassQuery = useChannelConfig(bankId, "orass_api", { enabled: canView });
+  const emailQuery = useChannelConfig(bankId, "email", { enabled: canView });
+  const deadlinesQuery = useReportingSettings(bankId, { enabled: canView });
+  const { allowed: canViewPolicies } = useOrganizationViewEligibility("reg");
+  const policiesQuery = useSigningPolicies(canViewPolicies);
+
+  const heading = (
+    <SettingsHeading
+      title={bank ? `How ${bank.shortName ?? bank.name} files` : "How your bank files"}
+      subtitle="Who you are to the regulator, how your returns reach it, and who must sign them."
+    />
+  );
+  if (!canView) {
+    return (
+      <>
+        {heading}
+        <DeniedSettings title="Reporting settings" reason={viewReason} />
+      </>
+    );
+  }
+  if (profileQuery.error) {
+    return (
+      <>
+        {heading}
+        <ErrorPanel
+          error={profileQuery.error}
+          onRetry={() => profileQuery.refetch()}
+          title="Could not load your reporting settings"
+        />
+      </>
+    );
+  }
+  const profile = profileQuery.data;
+  if (!profile) {
+    return (
+      <>
+        {heading}
+        <SkeletonCard />
+      </>
+    );
+  }
+
+  const gateway = gatewayQuery.data;
+  const latest = gateway?.transmissions[0];
+  const orassConfig = orassQuery.data?.config as Record<string, unknown> | undefined;
+  const orassReady =
+    !isChannelConfigMissingError(orassQuery.error) && Boolean(orassConfig?.api_base_url);
+  const emailConfig = emailQuery.data?.config as Record<string, unknown> | undefined;
+  const emailReady = Boolean(emailConfig?.fallback_recipient);
+  const overrides = Object.keys(deadlinesQuery.data?.deadlineOverrides ?? {}).length;
+  const policies = policiesQuery.data?.policies.length;
+  const signingOff = policiesQuery.data?.signingSuspendedDeploymentWide === true;
+
+  const channels: ChannelRow[] = [
+    {
+      label: "AequorOS Reporting Gateway",
+      status: gateway?.enrolled
+        ? { label: "Connected", tone: "success" }
+        : { label: "Not yet enrolled", tone: "slate" },
+      detail: gateway?.enrolled
+        ? [
+            "Enrolled by AequorOS",
+            latest ? `last filing ${fmtTimestamp(latest.sentAt)}` : "no filings yet",
+            "nothing to manage",
+          ].join(" · ")
+        : "Your AequorOS team enrols your bank; there is nothing for you to set up.",
+      href: `${BASE}/reporting-gateway`,
+      icon: <RadioTower size={18} aria-hidden />,
+    },
+    {
+      label: "ORASS",
+      status: orassReady
+        ? { label: "Access details stored", tone: "success" }
+        : { label: "Awaiting access", tone: "amber" },
+      detail: orassReady
+        ? "Files through ORASS with your stored access details."
+        : `The ${centralBankName()} has not yet issued API access. Rehearsals run against a clearly labelled simulator.`,
+      href: `${BASE}/orass`,
+      icon: <Server size={18} aria-hidden />,
+    },
+    {
+      label: "Email fallback",
+      status: emailReady
+        ? { label: "Ready", tone: "action" }
+        : { label: "No address", tone: "slate" },
+      detail:
+        "For downtime only: produces the complete files and step-by-step instructions to email them.",
+      href: `${BASE}/email`,
+      icon: <Mail size={18} aria-hidden />,
+    },
+    {
+      label: "Manual record",
+      status: { label: "Ready", tone: "action" },
+      detail: "Records a filing made outside AequorOS so the history stays complete.",
+      href: `${BASE}/manual`,
+      icon: <NotebookPen size={18} aria-hidden />,
+    },
+  ];
 
   return (
     <>
-      <PageHeader
-        eyebrow="Regulatory Reporting"
-        title="Channel settings"
-        action={
-          <label className="flex items-center gap-2 text-caption text-slate">
-            Channel
-            <select
-              value={channel}
-              onChange={(e) => setChannel(e.target.value as ChannelCode)}
-              className="rounded-sm border border-border bg-surface-raised px-2 py-1.5 text-caption text-navy"
-            >
-              {CHANNELS.map((code) => (
-                <option key={code} value={code}>
-                  {CHANNEL_LABELS[code]}
-                </option>
-              ))}
-            </select>
-          </label>
+      {heading}
+
+      <SectionCard
+        title="Filing profile"
+        subtitle="Used by every channel, so you set it once."
+        actions={
+          <Link
+            href={`${BASE}/filing-profile`}
+            className="inline-flex min-h-10 items-center rounded-sm border border-border px-3 text-caption font-medium text-navy hover:bg-surface-raised"
+          >
+            Edit profile
+          </Link>
         }
-      />
-
-      <PageContainer className="py-6 space-y-6">
-        {bankId && (
-          <ChannelForm key={channel} bankId={bankId} channel={channel} />
-        )}
-        {/* Who must sign is a separate control from how a return is
-            transmitted, but both belong to the same "how this institution
-            files" settings surface; its save carries the org-scope gate. */}
-        <SigningPolicyPanel />
-      </PageContainer>
-    </>
-  );
-}
-
-/**
- * The channel read answers 404 while the bank has never configured it — the
- * unconfigured state, not an outage (isChannelConfigMissingError). The
- * settings page sits behind the shell's bank context, so a bank-missing 404
- * never reaches this query.
- */
-function UnconfiguredStatus() {
-  return (
-    <div className="space-y-2">
-      <StatusPill tone="slate">No credentials stored</StatusPill>
-      <p className="text-caption text-slate leading-relaxed">
-        The ORASS sandbox works credential-less; storing credentials exercises
-        the vault seam that real ORASS onboarding will use.
-      </p>
-    </div>
-  );
-}
-
-/**
- * The stored channel configuration is restricted-surface configuration: the
- * backend answers it only to an exact reg/restricted view binding for this
- * bank. Without it the page refuses before it fetches, with a denial that is
- * visibly NOT the unconfigured state ("No credentials stored") and not an
- * outage panel either.
- */
-function DeniedChannelAccess({ reason }: { reason: string }) {
-  return (
-    <SectionCard
-      title="Channel configuration"
-      subtitle="Restricted configuration"
-    >
-      <div className="space-y-2 max-w-3xl" data-testid="channel-config-denied">
-        <StatusPill tone="critical">Access denied</StatusPill>
-        <p className="text-body text-navy leading-relaxed">
-          You do not have access to these settings.
-        </p>
-        <p className="text-caption text-slate leading-relaxed">{reason}</p>
-      </div>
-    </SectionCard>
-  );
-}
-
-function ChannelForm({
-  bankId,
-  channel,
-}: {
-  bankId: string;
-  channel: ChannelCode;
-}) {
-  // The read and the write are separate sentences (the backend decides both
-  // exactly this way): the stored row is read only by the exact reg/restricted
-  // view binding. The form is offered only to that reader — the PUT replaces
-  // the whole stored map, so a configure-only caller who cannot read what is
-  // stored must not be handed a form hydrated blank that would overwrite it.
-  // The API keeps the write for callers that already know the stored values.
-  const { allowed: canView, reason: viewReason } = useViewEligibility(
-    bankId,
-    "reg",
-  );
-  const configQuery = useChannelConfig(bankId, channel, { enabled: canView });
-  const save = useSaveChannelConfig(bankId);
-  // The PUT demands an exact reg / configure / restricted binding for this
-  // bank, on top of the read sentence above.
-  const { allowed: canConfigure, reason: configureReason } =
-    useConfigureEligibility(bankId, "reg");
-  const configureReasonId = useId();
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [hydrated, setHydrated] = useState(false);
-
-  const unconfigured = isChannelConfigMissingError(configQuery.error);
-  const config = configQuery.data;
-
-  useEffect(() => {
-    if (hydrated) return;
-    if (config) {
-      setForm(formFromConfig(config));
-      setHydrated(true);
-    } else if (unconfigured) {
-      setForm(EMPTY_FORM);
-      setHydrated(true);
-    }
-  }, [config, unconfigured, hydrated]);
-
-  if (!canView) {
-    return <DeniedChannelAccess reason={viewReason} />;
-  }
-  if (configQuery.isLoading || !hydrated) {
-    return <SkeletonCard />;
-  }
-  if (configQuery.error && !unconfigured) {
-    return (
-      <ErrorPanel
-        error={configQuery.error}
-        onRetry={() => configQuery.refetch()}
-        title="Could not load the channel configuration"
-      />
-    );
-  }
-
-  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
-
-  const handleSave = () => {
-    if (!canConfigure) return; // denied before any side effect, as the server denies
-    const configPayload: Record<string, unknown> = {
-      institution_code: form.institutionCode.trim(),
-      contact_name: form.contactName.trim(),
-      contact_email: form.contactEmail.trim(),
-      reporting_basis: form.reportingBasis,
-    };
-    if (channel === "orass_api") {
-      configPayload.api_base_url = form.apiBaseUrl.trim();
-      configPayload.auth_mode = form.authMode;
-      const timeout = Number.parseInt(form.timeoutSeconds, 10);
-      if (Number.isFinite(timeout) && timeout > 0) {
-        configPayload.timeout_seconds = timeout;
-      }
-      configPayload.verify_tls = form.verifyTls;
-    }
-    if (channel === "orass_sandbox") {
-      configPayload.sandbox_behavior = form.sandboxBehavior;
-      configPayload.resubmission_behavior = form.resubmissionBehavior;
-      configPayload.downtime = form.downtime;
-    }
-    if (channel === "orass_api" || channel === "orass_sandbox") {
-      if (form.principalUserName.trim()) {
-        configPayload.principal_user_name = form.principalUserName.trim();
-      }
-      if (form.principalUserEmail.trim()) {
-        configPayload.principal_user_email = form.principalUserEmail.trim();
-      }
-    }
-    if (channel === "email" && form.fallbackRecipient.trim()) {
-      configPayload.fallback_recipient = form.fallbackRecipient.trim();
-    }
-    // Credentials stay write-only: only sent when the operator typed material.
-    let credentials: Record<string, unknown> | undefined;
-    if (channel === "orass_api" && form.authMode === "api_key") {
-      if (form.apiKey.trim() !== "")
-        credentials = { api_key: form.apiKey.trim() };
-    } else if (channel === "orass_api" || channel === "orass_sandbox") {
-      if (form.username.trim() !== "" || form.password !== "") {
-        credentials = {
-          username: form.username.trim(),
-          password: form.password,
-        };
-      }
-    }
-    save.mutate(
-      { channel, config: configPayload, credentials },
-      {
-        onSuccess: () =>
-          setForm((prev) => ({
-            ...prev,
-            username: "",
-            password: "",
-            apiKey: "",
-          })),
-      },
-    );
-  };
-
-  const inputClass =
-    "w-full rounded-sm border border-border bg-surface-raised px-2.5 py-2 text-body text-navy placeholder:text-slate-light";
-  const labelClass = "block text-caption font-medium text-navy mb-1.5";
-
-  return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-      <div className="xl:col-span-2">
-        <SectionCard
-          title={CHANNEL_LABELS[channel]}
-          subtitle={
-            unconfigured && !save.isSuccess
-              ? "Not configured yet — saving creates the configuration"
-              : config
-                ? `Last updated ${fmtTimestamp(config.updatedAt)}`
-                : undefined
-          }
-          actions={
-            <span className="inline-flex flex-wrap items-center justify-end gap-2 max-w-56 sm:max-w-64">
-              {!canConfigure && (
-                <span
-                  id={configureReasonId}
-                  className="text-micro text-slate text-right"
-                >
-                  {configureReason}
-                </span>
-              )}
-              <button
-                type="button"
-                disabled={!canConfigure || save.isPending}
-                aria-describedby={
-                  !canConfigure ? configureReasonId : undefined
-                }
-                onClick={handleSave}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+      >
+        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {profileFacts(profile).map((fact) => (
+            <div key={fact.label} className="min-w-0">
+              <dt className="text-caption text-slate">{fact.label}</dt>
+              <dd
+                className={`mt-0.5 break-words text-navy ${fact.mono ? "font-mono text-body" : "text-body font-medium"}`}
               >
-                {save.isPending ? (
-                  <Loader2 size={13} className="animate-spin" aria-hidden />
-                ) : (
-                  <Save size={13} aria-hidden />
-                )}
-                Save configuration
-              </button>
-            </span>
+                {fact.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </SectionCard>
+
+      <SectionCard
+        title="Where approved returns go"
+        subtitle="The channel a return uses once its approvals are complete. You can still choose another for a single filing."
+        actions={
+          <Link
+            href={`${BASE}/filing-profile`}
+            className="text-caption font-medium text-action hover:underline"
+          >
+            Change
+          </Link>
+        }
+      >
+        <p className="text-body font-medium text-navy">
+          {defaultChannelLabel(profile.defaultChannel)}
+        </p>
+        <p className="mt-1 max-w-3xl text-caption leading-relaxed text-slate">
+          If the gateway is unavailable, file by email fallback, then re-send through
+          the gateway when it recovers.
+        </p>
+      </SectionCard>
+
+      <SectionCard title="Submission channels" noPadding>
+        <ul>
+          {channels.map((channel) => (
+            <li
+              key={channel.href}
+              className="flex flex-wrap items-center justify-between gap-3 border-b border-border-light px-5 py-4 last:border-0"
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="mt-0.5 text-action">{channel.icon}</span>
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-2">
+                    <span className="text-body font-medium text-navy">{channel.label}</span>
+                    <StatusPill tone={channel.status.tone}>{channel.status.label}</StatusPill>
+                  </p>
+                  <p className="mt-0.5 text-caption leading-relaxed text-slate">
+                    {channel.detail}
+                  </p>
+                </div>
+              </div>
+              <Link
+                href={channel.href}
+                className="inline-flex min-h-10 items-center gap-1 text-caption font-medium text-action hover:underline"
+              >
+                Manage
+                <ArrowRight size={13} aria-hidden />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </SectionCard>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <SectionCard
+          title="Signing"
+          actions={
+            policiesQuery.data ? (
+              <StatusPill tone={signingOff ? "slate" : "success"}>
+                {signingOff ? "Switched off" : "On"}
+              </StatusPill>
+            ) : undefined
           }
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
-            <div>
-              <label className={labelClass} htmlFor="institution-code">
-                Institution code
-              </label>
-              <input
-                id="institution-code"
-                value={form.institutionCode}
-                onChange={(e) => set("institutionCode", e.target.value)}
-                placeholder="e.g. SBL"
-                className={inputClass}
-              />
-              <p className="mt-1 text-micro text-slate leading-relaxed">
-                Internal identifier — the ORASS institution-code scheme is not
-                public (research gap G9).
-              </p>
-            </div>
-            <div>
-              <label className={labelClass} htmlFor="reporting-basis">
-                Reporting basis
-              </label>
-              <select
-                id="reporting-basis"
-                value={form.reportingBasis}
-                onChange={(e) => set("reportingBasis", e.target.value)}
-                className={inputClass}
-              >
-                {BASIS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelClass} htmlFor="contact-name">
-                Reporting contact
-              </label>
-              <input
-                id="contact-name"
-                value={form.contactName}
-                onChange={(e) => set("contactName", e.target.value)}
-                placeholder="Name / designation"
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label className={labelClass} htmlFor="contact-email">
-                Contact email
-              </label>
-              <input
-                id="contact-email"
-                type="email"
-                value={form.contactEmail}
-                onChange={(e) => set("contactEmail", e.target.value)}
-                placeholder="reporting@bank.example"
-                className={inputClass}
-              />
-            </div>
-
-            {channel === "orass_api" && (
-              <>
-                <div className="md:col-span-2">
-                  <label className={labelClass} htmlFor="api-base-url">
-                    API base URL{" "}
-                    <span className="font-normal text-critical">
-                      (required)
-                    </span>
-                  </label>
-                  <input
-                    id="api-base-url"
-                    value={form.apiBaseUrl}
-                    onChange={(e) => set("apiBaseUrl", e.target.value)}
-                    placeholder="https://orass-portal.example/api"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="auth-mode">
-                    Auth mode
-                  </label>
-                  <select
-                    id="auth-mode"
-                    value={form.authMode}
-                    onChange={(e) => set("authMode", e.target.value)}
-                    className={inputClass}
-                  >
-                    {AUTH_MODES.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="timeout-seconds">
-                    Timeout (seconds)
-                  </label>
-                  <input
-                    id="timeout-seconds"
-                    type="number"
-                    min={1}
-                    value={form.timeoutSeconds}
-                    onChange={(e) => set("timeoutSeconds", e.target.value)}
-                    placeholder="30"
-                    className={inputClass}
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="inline-flex items-center gap-2.5 text-body text-navy cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.verifyTls}
-                      onChange={(e) => set("verifyTls", e.target.checked)}
-                      className="w-4 h-4 accent-[rgb(var(--accent))]"
-                    />
-                    Verify TLS certificates
-                  </label>
-                </div>
-                <p className="md:col-span-2 -mt-2 text-micro text-slate leading-relaxed">
-                  Endpoint + credentials come from your {regShort()}/Regnology
-                  onboarding pack; the wire contract is aligned at onboarding.
-                </p>
-              </>
-            )}
-
-            {channel === "orass_sandbox" && (
-              <>
-                <div>
-                  <label className={labelClass} htmlFor="sandbox-behavior">
-                    Sandbox behavior
-                  </label>
-                  <select
-                    id="sandbox-behavior"
-                    value={form.sandboxBehavior}
-                    onChange={(e) => set("sandboxBehavior", e.target.value)}
-                    className={inputClass}
-                  >
-                    {SANDBOX_BEHAVIORS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="resubmission-behavior">
-                    Resubmission behavior
-                  </label>
-                  <select
-                    id="resubmission-behavior"
-                    value={form.resubmissionBehavior}
-                    onChange={(e) =>
-                      set("resubmissionBehavior", e.target.value)
-                    }
-                    className={inputClass}
-                  >
-                    {RESUBMISSION_BEHAVIORS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex items-start">
-                  <label className="inline-flex items-center gap-2.5 text-body text-navy cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.downtime}
-                      onChange={(e) => set("downtime", e.target.checked)}
-                      className="w-4 h-4 accent-[rgb(var(--accent))]"
-                    />
-                    Simulate ORASS downtime
-                  </label>
-                </div>
-                <p className="md:col-span-2 -mt-2 text-micro text-slate leading-relaxed">
-                  With downtime on, ORASS submissions return the structured
-                  BG/FMD/2026/07 fallback — use it to demo the email downtime
-                  workflow and the subsequent ORASS re-upload.
-                </p>
-              </>
-            )}
-
-            {(channel === "orass_api" || channel === "orass_sandbox") && (
-              <>
-                <div className="md:col-span-2 pt-2">
-                  <p className="text-body font-medium text-navy">
-                    ORASS portal principal user
-                  </p>
-                  <p className="mt-1 text-micro text-slate leading-relaxed">
-                    Only the ORASS Principal user can submit on the portal;
-                    AequorOS gates submission to approver-role logins.
-                  </p>
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="principal-user-name">
-                    Principal user name
-                  </label>
-                  <input
-                    id="principal-user-name"
-                    value={form.principalUserName}
-                    onChange={(e) => set("principalUserName", e.target.value)}
-                    placeholder="Name / designation"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="principal-user-email">
-                    Principal user email
-                  </label>
-                  <input
-                    id="principal-user-email"
-                    type="email"
-                    value={form.principalUserEmail}
-                    onChange={(e) => set("principalUserEmail", e.target.value)}
-                    placeholder="principal@bank.example"
-                    className={inputClass}
-                  />
-                </div>
-              </>
-            )}
-
-            {channel === "email" && (
-              <div className="md:col-span-2">
-                <label className={labelClass} htmlFor="fallback-recipient">
-                  Downtime return recipient
-                </label>
-                <input
-                  id="fallback-recipient"
-                  type="email"
-                  value={form.fallbackRecipient}
-                  onChange={(e) => set("fallbackRecipient", e.target.value)}
-                  placeholder="Supervisor-provided return-desk address"
-                  className={inputClass}
-                />
-                <p className="mt-1 text-micro text-slate leading-relaxed">
-                  The {regShort()} downtime-return address is UNKNOWN in the
-                  public record; bsdletters@bog.gov.gh is confirmed only for
-                  directive-consultation correspondence. Use the address your
-                  {regShort()} supervision contact provides.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {(channel === "orass_api" || channel === "orass_sandbox") && (
-            <div className="mt-6 pt-5 border-t border-border-light max-w-3xl">
-              <p className="inline-flex items-center gap-2 text-body font-medium text-navy">
-                <KeyRound size={14} className="text-slate" aria-hidden />
-                ORASS credentials (write-only)
-              </p>
-              <p className="mt-1 text-caption text-slate leading-relaxed">
-                Encrypted with AES-256-GCM in the credential vault and retrieved
-                per submission cycle only. Responses expose the SHA-256
-                fingerprint — never the material. Leave blank to keep the stored
-                credential.
-              </p>
-              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {channel === "orass_api" && form.authMode === "api_key" ? (
-                  <div>
-                    <label className={labelClass} htmlFor="orass-api-key">
-                      API key
-                    </label>
-                    <input
-                      id="orass-api-key"
-                      type="password"
-                      value={form.apiKey}
-                      onChange={(e) => set("apiKey", e.target.value)}
-                      autoComplete="new-password"
-                      className={inputClass}
-                    />
-                  </div>
-                ) : (
-                  <>
-                    <div>
-                      <label className={labelClass} htmlFor="orass-username">
-                        Portal username
-                      </label>
-                      <input
-                        id="orass-username"
-                        value={form.username}
-                        onChange={(e) => set("username", e.target.value)}
-                        autoComplete="off"
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass} htmlFor="orass-password">
-                        Portal password
-                      </label>
-                      <input
-                        id="orass-password"
-                        type="password"
-                        value={form.password}
-                        onChange={(e) => set("password", e.target.value)}
-                        autoComplete="new-password"
-                        className={inputClass}
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {save.error && (
-            <div className="mt-4 max-w-3xl">
-              <ErrorPanel error={save.error} title="Could not save" />
-            </div>
-          )}
-          {save.isSuccess && (
-            <p className="mt-4 text-caption text-success font-medium">
-              Configuration saved.
-            </p>
-          )}
-        </SectionCard>
-      </div>
-
-      <div className="space-y-6">
-        <SectionCard title="Credential status">
-          {/* The save response is a write-only acknowledgement; the stored
-              status and fingerprint come from the refetched read. The read is
-              invalidated, not awaited, so never claim a stored/absent state
-              from data that is not current. A missing channel reads 404 —
-              that is the unconfigured state, not an outage. Any other read
-              failure renders the form-level error panel above and never
-              reaches this card. */}
-          {configQuery.isPending ? (
-            <StatusPill tone="slate">Checking credential status…</StatusPill>
-          ) : unconfigured ? (
-            <UnconfiguredStatus />
-          ) : config?.hasCredentials ? (
-            <div className="space-y-2">
-              <StatusPill tone="success">Credentials stored</StatusPill>
-              <p className="font-mono text-caption text-slate tnum">
-                fingerprint {shortId(config.credentialFingerprint ?? "", 16)}
-              </p>
-            </div>
-          ) : (
-            <UnconfiguredStatus />
-          )}
-        </SectionCard>
-
-        <div className="card px-5 py-4 flex items-start gap-3">
-          <FlaskConical
-            size={15}
-            className="text-warning shrink-0 mt-0.5"
-            aria-hidden
-          />
-          <p className="text-caption text-navy/80 leading-relaxed">
-            ORASS integration ships as a clearly-labeled sandbox simulator — the
-            portal&apos;s API is not publicly documented. Real onboarding (
-            {regShort()}/Regnology-issued specs and credentials) is a
-            configuration swap behind the same channel interface.
+          <p className="text-body leading-relaxed text-navy">
+            {policies === undefined
+              ? "Who must sign which return before it can be filed."
+              : signingOff
+                ? `Returns follow the prepare-and-approve route. ${
+                    policies === 0
+                      ? "Policies you record take"
+                      : `Your ${policies} recorded ${policies === 1 ? "policy takes" : "policies take"}`
+                  } effect when signing is switched on.`
+                : policies === 0
+                  ? "No policies recorded. Every return needs a preparer and an approver."
+                  : `${policies} ${policies === 1 ? "policy" : "policies"} recorded.`}
           </p>
-        </div>
+          <Link
+            href={`${BASE}/signing`}
+            className="mt-3 inline-block text-caption font-medium text-action hover:underline"
+          >
+            Manage signing policies
+          </Link>
+        </SectionCard>
+        <SectionCard title="Deadlines">
+          <p className="text-body leading-relaxed text-navy">
+            {overrides === 0
+              ? "No extensions. Reporting dates and deadlines follow the regulator’s schedule for each return."
+              : `${overrides} agreed ${overrides === 1 ? "extension" : "extensions"}. Every other return follows the regulator’s schedule.`}
+          </p>
+          <Link
+            href={`${BASE}/deadlines`}
+            className="mt-3 inline-block text-caption font-medium text-action hover:underline"
+          >
+            {overrides === 0 ? "Add an agreed extension" : "Manage extensions"}
+          </Link>
+        </SectionCard>
       </div>
-    </div>
+    </>
   );
 }

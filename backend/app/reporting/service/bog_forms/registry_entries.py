@@ -152,6 +152,11 @@ def _section_code(sheet_name: str) -> str:
     return "sheet_" + "".join(ch.lower() if ch.isalnum() else "_" for ch in sheet_name).strip("_")
 
 
+def sheet_section_code(sheet_name: str) -> str:
+    """The section code an official sheet carries in snapshots and templates."""
+    return _section_code(sheet_name)
+
+
 __all__ = [
     "BOG_FAMILY",
     "FormSpec",
@@ -159,6 +164,7 @@ __all__ = [
     "build_templates",
     "days_after",
     "is_bog_official_template",
+    "sheet_section_code",
     "template_id_for",
     "weekly_reporting_dates",
 ]

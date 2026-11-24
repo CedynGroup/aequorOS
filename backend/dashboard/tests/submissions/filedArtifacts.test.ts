@@ -52,9 +52,9 @@ test("the server's `signed` flag decides the record, not the file type", () => {
   assert.equal(roleFor("pdf", false), "official_copy");
 });
 
-test("the formula copy is labelled as not the signed record", () => {
+test("the formula workbook is labelled as the Excel with the template's live formulas", () => {
   assert.equal(roleFor("xlsx_working", false), "formula_copy");
-  assert.match(FILED_ROLE_LABEL.formula_copy, /not the signed record/i);
+  assert.match(FILED_ROLE_LABEL.formula_copy, /live formulas/i);
 });
 
 test("an unknown kind is data, never the record", () => {
