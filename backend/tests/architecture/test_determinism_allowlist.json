@@ -525,7 +525,7 @@
     "AQPY001": 2
   },
   "tests/services/test_worker_lanes_integration.py": {
-    "AQPY001": 5
+    "AQPY001": 4
   },
   "tests/storage/contract.py": {
     "AQPY001": 1

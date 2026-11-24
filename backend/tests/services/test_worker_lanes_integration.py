@@ -111,40 +111,27 @@ def test_reclaim_without_a_selection_keeps_the_legacy_behaviour(db_session: Sess
     assert job_queue.reclaim_stale(db_session, now, stale_after=timedelta(seconds=900)) == 1
 
 
-def test_healthcheck_filters_to_this_workers_own_heartbeat(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_healthcheck_filters_to_this_workers_own_heartbeat(db_session: Session) -> None:
     """A probe that passes on a PEER's heartbeat can never fail."""
-    from app import worker as worker_module  # noqa: PLC0415
-    from app.db.base import utc_now  # noqa: PLC0415
+    from app.db import worker_probe  # noqa: PLC0415
     from app.models import WorkerHeartbeat  # noqa: PLC0415
 
-    seen_at = utc_now()
+    seen_at = datetime(2026, 11, 24, 12, 0, tzinfo=UTC)
     db_session.add(
-        WorkerHeartbeat(worker_id="risk-worker", started_at=seen_at, last_seen_at=seen_at)
+        WorkerHeartbeat(worker_id="probe-peer", started_at=seen_at, last_seen_at=seen_at)
     )
     db_session.commit()
 
-    monkeypatch.setenv("WORKER_ID", "risk-worker-ai")
-    get_settings.cache_clear()
-    monkeypatch.setattr(worker_module, "assert_worker_database_access", lambda: None)
-    monkeypatch.setattr(worker_module, "_new_session", lambda *a, **k: _NoCloseSession(db_session))
-
+    connection = db_session.connection()
+    peer = worker_probe.latest_heartbeat(connection, "probe-peer")
+    assert peer is not None
+    assert peer.replace(tzinfo=peer.tzinfo or UTC) == seen_at  # SQLite keeps no zone
+    latest = worker_probe.latest_heartbeat(connection, "probe-self")
+    assert latest is None
     with pytest.raises(RuntimeError, match="No heartbeat"):
-        worker_module.healthcheck()
-
-
-class _NoCloseSession:
-    """Wrap the test session so the worker's ``with`` block cannot close it."""
-
-    def __init__(self, session: Session) -> None:
-        self._session = session
-
-    def __enter__(self) -> Session:
-        return self._session
-
-    def __exit__(self, *exc: object) -> bool:
-        return False
+        worker_probe.require_fresh_heartbeat(
+            latest, stale_after=timedelta(seconds=900), now=seen_at
+        )
 
 
 def test_an_ai_job_gets_exactly_one_crash_rerun(db_session: Session) -> None:
