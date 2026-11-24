@@ -321,7 +321,7 @@ def _same_key(a: ec.EllipticCurvePublicKey, b: ec.EllipticCurvePublicKey) -> boo
 
 @dataclass(frozen=True)
 class _ParsedClientRequest:
-    csr_key: ec.EllipticCurvePublicKey
+    requested: ec.EllipticCurvePublicKey
     jwks: dict[str, JsonValue]
 
 
@@ -334,9 +334,9 @@ def _parse_client_request(request: IssueClientRequest) -> _ParsedClientRequest:
         ) from exc
     if not csr.is_signature_valid:
         raise ApiError("invalid_request", "The CSR signature is not valid.")
-    csr_key = csr.public_key()
-    if not isinstance(csr_key, ec.EllipticCurvePublicKey) or not isinstance(
-        csr_key.curve, ec.SECP256R1
+    requested = csr.public_key()
+    if not isinstance(requested, ec.EllipticCurvePublicKey) or not isinstance(
+        requested.curve, ec.SECP256R1
     ):
         raise ApiError("invalid_request", "The CSR key must be EC P-256.")
     jwks: dict[str, JsonValue] = {"keys": list(request.jwks.keys)}
@@ -344,12 +344,12 @@ def _parse_client_request(request: IssueClientRequest) -> _ParsedClientRequest:
         assertion_keys = [public_key_from_jwk(jwk) for jwk in jwks_keys(jwks)]
     except JwkError as exc:
         raise ApiError("invalid_request", f"jwks: {exc}") from exc
-    if not any(_same_key(csr_key, key) for key in assertion_keys):
+    if not any(_same_key(requested, key) for key in assertion_keys):
         raise ApiError(
             "invalid_request",
             "The CSR public key must equal the JWKS key used for client assertions.",
         )
-    return _ParsedClientRequest(csr_key=csr_key, jwks=jwks)
+    return _ParsedClientRequest(requested=requested, jwks=jwks)
 
 
 def issue_client(
@@ -379,8 +379,8 @@ def issue_client(
         )
     ):
         cert = x509.load_pem_x509_certificate(existing.certificate_pem.encode("ascii"))
-        cert_key = cert.public_key()
-        if isinstance(cert_key, ec.EllipticCurvePublicKey) and _same_key(cert_key, parsed.csr_key):
+        issued = cert.public_key()
+        if isinstance(issued, ec.EllipticCurvePublicKey) and _same_key(issued, parsed.requested):
             # A repeated request may declare a newer version of the same software.
             declared = (
                 f"{request.software.name} {request.software.version}" if request.software else None
@@ -415,7 +415,7 @@ def issue_client(
     ):
         raise ApiError("conflict", f"Client id {client_id} is taken.")
     certificate = ca.issue(
-        parsed.csr_key,
+        parsed.requested,
         common_name=client_id,
         organisation=institution.name,
         not_before=now - timedelta(minutes=5),

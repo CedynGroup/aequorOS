@@ -13,6 +13,9 @@ description = "Test fixtures, example files, canaries, and non-secret example to
 regexTarget = "line"
 paths = [
   '''backend/tests/.*''',
+  # The Reporting Gateway's tests pass signing keys around as keyword arguments,
+  # which the generic-api-key rule reads as credentials, as it does in backend/tests.
+  '''gateway/api/tests/.*''',
   '''.*\.env\.example$''',
   '''.*/fixtures/.*''',
   # Jurisdiction ICAAP manifests are pure domain data. Their `"key"` fields are
