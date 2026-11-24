@@ -22,7 +22,7 @@ from datetime import timedelta
 from typing import cast
 from uuid import uuid4
 
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.bi.jobs import (
@@ -420,40 +420,6 @@ def start_inprocess_worker() -> threading.Thread | None:
     thread.start()
     logger.info("In-process live-engine worker thread started")
     return thread
-
-
-def healthcheck() -> None:
-    """Container health probe: can this worker claim, and is it still polling?
-
-    Two questions, because they have different answers and only one of them was
-    ever askable. ``assert_worker_database_access`` catches the configuration
-    that makes ``claim_next`` match zero rows forever (audit finding P0-16);
-    the heartbeat catches a loop that is wedged or dead while the process is
-    still alive. Raises on failure — the compose healthcheck reads the exit
-    code.
-    """
-    assert_worker_database_access()
-    settings = get_settings()
-    stale_after = timedelta(seconds=settings.worker.worker_stale_job_seconds)
-    with _new_session() as session:
-        query = session.query(func.max(WorkerHeartbeat.last_seen_at))
-        # Filter to THIS worker's own heartbeat when it has a pinned identity.
-        # Without it a dedicated container (the AI worker) reports healthy on the
-        # strength of the core worker's heartbeat — a probe that can never fail
-        # is not a probe. Unpinned local workers keep the legacy fleet-wide max.
-        if settings.worker.worker_id is not None:
-            query = query.filter(WorkerHeartbeat.worker_id == settings.worker.worker_id)
-        latest = query.scalar()
-    if latest is None:
-        msg = "No heartbeat has been recorded for this worker."
-        raise RuntimeError(msg)
-    age = utc_now() - latest
-    if age > stale_after:
-        msg = (
-            f"Worker heartbeat is {age.total_seconds():.0f}s old "
-            f"(limit {stale_after.total_seconds():.0f}s)."
-        )
-        raise RuntimeError(msg)
 
 
 def _warn_if_ai_unconfigured(settings) -> None:  # pragma: no cover - process entrypoint

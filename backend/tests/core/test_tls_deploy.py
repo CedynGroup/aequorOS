@@ -42,6 +42,19 @@ def test_backend_workers_receive_trust_roots_without_listener_keys() -> None:
         assert all(mapping(volume).get("external") is True for volume in declarations.values())
 
 
+def test_worker_probes_run_the_light_probe_with_room_to_finish() -> None:
+    """Each probe starts a fresh interpreter: importing ``app.worker`` overran 15 s."""
+    for file in ("backend/docker-compose.prod.yml", "backend/docker-compose.ai.prod.yml"):
+        services = mapping(compose(file)["services"])
+        workers = [name for name in services if name.startswith("risk-worker")]
+        assert workers, file
+        for name in workers:
+            healthcheck = mapping(mapping(services[name])["healthcheck"])
+            assert healthcheck["test"] == ["CMD-SHELL", "python -m app.db.worker_probe"], name
+            assert healthcheck["timeout"] == "45s", name
+            assert healthcheck["interval"] == "60s", name
+
+
 @pytest.mark.parametrize("exit_code,expected", [(0, 0), (2, 0), (1, 1)])
 @pytest.mark.parametrize("host_result", [None, "1"])
 def test_openbao_healthcheck_distinguishes_sealed_from_transport_failure(

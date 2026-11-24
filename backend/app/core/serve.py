@@ -13,6 +13,14 @@ import uvicorn
 from app.core.config import get_settings
 from app.core.tls import TransportSecurityError, plaintext_allowed, validate_service_transports
 
+#: How long uvicorn waits for a worker process to answer its liveness ping before
+#: killing and replacing it. A new worker answers only once its interpreter has
+#: started and imported this module, and uvicorn's 5 s default is shorter than
+#: that takes when several workers start together on a two-core host: on
+#: 2026-11-24 production killed and respawned API workers 12 times before a round
+#: got through. A hung worker is still replaced, after this long.
+WORKER_PING_TIMEOUT_SECONDS = 60
+
 
 def listener_options() -> dict[str, str | int | bool]:
     settings = get_settings()
@@ -47,6 +55,7 @@ def main() -> None:
         host="0.0.0.0",
         port=8000 if service == "api" else 8100,
         workers=int(os.getenv("WEB_CONCURRENCY", "4")) if service == "api" else 1,
+        timeout_worker_healthcheck=WORKER_PING_TIMEOUT_SECONDS,
         **options,  # type: ignore[arg-type] - uvicorn's heterogeneous keyword arguments
     )
 

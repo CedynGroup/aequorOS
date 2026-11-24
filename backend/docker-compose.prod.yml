@@ -96,16 +96,19 @@ services:
     # process liveness alone cannot detect stranded jobs. The probe also checks
     # a poll-loop heartbeat within WORKER_STALE_JOB_SECONDS. Credential rollout:
     # docs/ops/database-roles.md#worker-compatibility-migration.
+    # The probe runs in a fresh interpreter and opens a new database connection
+    # every time, so it imports only app/db/worker_probe.py and gets 45 s;
+    # start_period covers the workers and the API starting together.
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          'python -c "from app.worker import healthcheck; healthcheck()"',
+          'python -m app.db.worker_probe',
         ]
       interval: 60s
-      timeout: 15s
+      timeout: 45s
       retries: 3
-      start_period: 60s
+      start_period: 180s
     env_file:
       - .env
     volumes:
@@ -156,12 +159,12 @@ services:
       test:
         [
           "CMD-SHELL",
-          'python -c "from app.worker import healthcheck; healthcheck()"',
+          'python -m app.db.worker_probe',
         ]
       interval: 60s
-      timeout: 15s
+      timeout: 45s
       retries: 3
-      start_period: 60s
+      start_period: 180s
     env_file:
       - .env
     volumes:

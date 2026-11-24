@@ -2101,7 +2101,6 @@
   "reportUnknownVariableType": 13
  },
  "app.worker": {
-  "reportAny": 3,
   "reportMissingParameterType": 2,
   "reportUnknownArgumentType": 1,
   "reportUnknownMemberType": 8,
