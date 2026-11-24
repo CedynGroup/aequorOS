@@ -24,9 +24,11 @@ export function hrefWith(path: string, current: Record<string, string | undefine
   return text ? `${path}?${text}` : path;
 }
 
-export const RECEIPT_ID = /^SRG-\d{2}-\d{7}$/;
-export const QUERY_NUMBER = /^QRY-\d{4}-\d{4}$/;
-export const ACCESS_NUMBER = /^SUP-\d{4}-\d{4}$/;
+// The API numbers these with a minimum width (sequences.py: 07d, 04d, 04d), so a
+// busy year runs past it; match "at least", never "exactly".
+export const RECEIPT_ID = /^SRG-\d{2}-\d{7,}$/;
+export const QUERY_NUMBER = /^QRY-\d{4}-\d{4,}$/;
+export const ACCESS_NUMBER = /^SUP-\d{4}-\d{4,}$/;
 export const INSTITUTION_CODE = /^\d{4}$/;
 export const DATE = /^\d{4}-\d{2}-\d{2}$/;
 

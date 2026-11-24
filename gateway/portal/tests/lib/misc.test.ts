@@ -81,6 +81,11 @@ test("links: object references and filter-preserving hrefs", () => {
   assert.equal(objectHref("SUP-2026-0042"), "/access");
   assert.equal(objectHref("0231"), "/institutions/0231");
   assert.equal(objectHref("session 4f1a…"), null);
+  // The API's numbering is a minimum width: a busy year runs past it.
+  assert.equal(objectHref("QRY-2026-10000"), "/queries/QRY-2026-10000");
+  assert.equal(objectHref("SUP-2026-10000"), "/access");
+  assert.equal(objectHref("SRG-26-10000000"), "/submissions/SRG-26-10000000");
+  assert.equal(objectHref("QRY-2026-031"), null);
   assert.equal(hrefWith("/audit", { actor: "staff", cursor: "c1" }, { entry: "5", cursor: undefined }), "/audit?actor=staff&entry=5");
 });
 

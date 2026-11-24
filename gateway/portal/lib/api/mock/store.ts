@@ -521,7 +521,7 @@ export function createMockGateway(viewer: Me, state: MockState = sharedMockState
     },
 
     async approveReturnVersion(code, version) {
-      if (!has("returns_policy")) throw forbidden("Only returns policy officers can approve return definitions.");
+      if (!has("returns_policy", "senior_supervisor")) throw forbidden("Only returns policy officers and senior supervisors can approve return definitions.");
       const detail = returnDetail(code);
       const draft = detail.draft;
       if (!draft || draft.version !== version) throw notFound();
@@ -557,7 +557,7 @@ export function createMockGateway(viewer: Me, state: MockState = sharedMockState
     },
 
     async returnReturnVersion(code, version, body) {
-      if (!has("returns_policy")) throw forbidden("Only returns policy officers can return a draft.");
+      if (!has("returns_policy", "senior_supervisor")) throw forbidden("Only returns policy officers and senior supervisors can return a draft.");
       if (!body.reason.trim()) throw invalid("Say why the draft is being returned.");
       const detail = returnDetail(code);
       if (!detail.draft || detail.draft.version !== version) throw notFound();

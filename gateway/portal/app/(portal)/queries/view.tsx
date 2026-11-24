@@ -64,7 +64,7 @@ function NewQuery({ receipts, open }: { receipts: SubmissionRow[] | null; open: 
                 ))}
               </select>
             ) : (
-              <input id="n-receipt" name="receipt_id" required placeholder="Receipt, e.g. SRG-26-0114806" pattern="[Ss][Rr][Gg]-\d{2}-\d{7}" className={cx(field.input, "font-mono")} />
+              <input id="n-receipt" name="receipt_id" required placeholder="Receipt, e.g. SRG-26-0114806" pattern="[Ss][Rr][Gg]-\d{2}-\d{7,}" className={cx(field.input, "font-mono")} />
             )}
           </div>
           <div className="flex flex-col gap-1.5">

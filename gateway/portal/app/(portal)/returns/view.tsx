@@ -195,7 +195,8 @@ export async function ReturnsView({ params, selected }: { params: SearchParams; 
   const focus = selected ?? list.data.items.find((r) => r.status === "draft_pending")?.code ?? null;
   const detail = focus ? (selected ? await load(api.getReturn(focus)) : await optional(api.getReturn(focus)).then((d) => (d ? { ok: true as const, data: d } : null))) : null;
   const canDecide = capabilities.decideReturns(me.roles);
-  const drafting = Boolean(selected && canDecide && param(params, "draft") === "new" && detail?.ok && !detail.data.draft);
+  const canDraft = capabilities.draftReturns(me.roles);
+  const drafting = Boolean(selected && canDraft && param(params, "draft") === "new" && detail?.ok && !detail.data.draft);
   const notice = noticeFrom(params, selected ? `/returns/${selected}` : "/returns");
   const items = list.data.items.filter(
     (r) => (!q || r.code.toLowerCase().includes(q) || r.name.toLowerCase().includes(q)) && (!cadence || r.cadence === cadence) && (!status || r.status === status),
@@ -210,7 +211,7 @@ export async function ReturnsView({ params, selected }: { params: SearchParams; 
         title="Return definitions"
         subtitle="The returns institutions must file, their schemas, validation rules and due dates. Every change needs two approvers."
         actions={
-          canDecide && focus ? (
+          canDraft && focus ? (
             <Link href={`/returns/${focus}?draft=new`} className={button.primary}>Draft a new version</Link>
           ) : undefined
         }
@@ -296,7 +297,7 @@ export async function ReturnsView({ params, selected }: { params: SearchParams; 
           ) : detail.data.draft ? (
             <DraftPanel detail={detail.data} canDecide={canDecide} />
           ) : (
-            <VersionsPanel detail={detail.data} canDraft={canDecide} />
+            <VersionsPanel detail={detail.data} canDraft={canDraft} />
           )}
         </aside>
       </div>

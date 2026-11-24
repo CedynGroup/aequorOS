@@ -79,7 +79,7 @@ test("return versions need a drafter and two other approvers", async () => {
   const state = createMockState();
   await assert.rejects(createMockGateway(staff.esi, state, () => NOW).approveReturnVersion("BSD5A", "2026.2"), (e: unknown) => isCode("forbidden")(e) && /drafted/.test((e as GatewayApiError).detail ?? ""));
   await assert.rejects(createMockGateway(staff.michael, state, () => NOW).approveReturnVersion("BSD5A", "2026.2"), (e: unknown) => isCode("forbidden")(e) && /already approved/.test((e as GatewayApiError).detail ?? ""));
-  await assert.rejects(createMockGateway(staff.kofi, state, () => NOW).approveReturnVersion("BSD5A", "2026.2"), isCode("forbidden"), "not a returns policy officer");
+  await assert.rejects(createMockGateway(staff.akosua, state, () => NOW).approveReturnVersion("BSD5A", "2026.2"), isCode("forbidden"), "a supervisor is not an approver");
   const michael = createMockGateway(staff.michael, state, () => NOW);
   await assert.rejects(michael.returnReturnVersion("BSD5A", "2026.2", { reason: " " }), isCode("invalid_request"));
   await michael.returnReturnVersion("BSD5A", "2026.2", { reason: "Line 4.7 needs a definition." });
@@ -89,6 +89,9 @@ test("return versions need a drafter and two other approvers", async () => {
   await esi.createReturnDraft("LMT", { version: "2026.2", change_summary: "Tightens Table 4", first_reporting_date: "2027-03-31", notice_days: 60, schema: {}, rules: [] });
   await michael.approveReturnVersion("LMT", "2026.2");
   assert.equal((await michael.getReturn("LMT")).draft?.approvals.filter((a) => a.step === "approved").length, 1);
+  // A senior supervisor is the design's "Second approver, Supervision", as in the API.
+  await createMockGateway(staff.kofi, state, () => NOW).approveReturnVersion("LMT", "2026.2");
+  assert.equal((await michael.getReturn("LMT")).draft, null);
 });
 
 test("operator sessions: only access approvers decide, and a denial needs a reason", async () => {

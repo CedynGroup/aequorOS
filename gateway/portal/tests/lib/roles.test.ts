@@ -28,8 +28,14 @@ test("capabilities follow ARCHITECTURE.md's role table", () => {
   assert.equal(capabilities.supervise(["senior_supervisor"]), true);
   assert.equal(capabilities.supervise(["auditor"]), false);
   assert.equal(capabilities.supervise(["returns_policy"]), false);
+  // Drafting is Returns Policy's; deciding a draft is also the Senior Supervisor's,
+  // the design's "Second approver, Supervision" (api returns/service.py APPROVER_ROLES).
+  assert.equal(capabilities.draftReturns(["returns_policy"]), true);
+  assert.equal(capabilities.draftReturns(["senior_supervisor"]), false);
   assert.equal(capabilities.decideReturns(["returns_policy"]), true);
-  assert.equal(capabilities.decideReturns(["senior_supervisor"]), false);
+  assert.equal(capabilities.decideReturns(["senior_supervisor"]), true);
+  assert.equal(capabilities.decideReturns(["supervisor"]), false);
+  assert.equal(capabilities.decideReturns(["auditor"]), false);
   assert.equal(capabilities.approveAccess(["access_approver"]), true);
   assert.equal(capabilities.approveAccess(["senior_supervisor", "returns_policy"]), false);
   assert.equal(capabilities.exportAudit(["auditor"]), true);

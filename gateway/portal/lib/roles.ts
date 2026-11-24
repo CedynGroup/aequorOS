@@ -14,8 +14,13 @@ function hasAny(roles: readonly Role[], ...wanted: Role[]): boolean {
 export const capabilities = {
   /** Raise and answer queries, close them, write supervisory notes. */
   supervise: (roles: readonly Role[]) => hasAny(roles, "supervisor", "senior_supervisor"),
-  /** Draft, approve or return return-definition versions. */
-  decideReturns: (roles: readonly Role[]) => hasAny(roles, "returns_policy"),
+  /** Draft a new return-definition version: Returns Policy only. */
+  draftReturns: (roles: readonly Role[]) => hasAny(roles, "returns_policy"),
+  /**
+   * Approve or return a draft: Returns Policy, or a Senior Supervisor as the
+   * design's "Second approver, Supervision" (the API's APPROVER_ROLES).
+   */
+  decideReturns: (roles: readonly Role[]) => hasAny(roles, "returns_policy", "senior_supervisor"),
   /** Approve or deny operator support sessions. */
   approveAccess: (roles: readonly Role[]) => hasAny(roles, "access_approver"),
   /** Verifying the chain and exporting the log decide nothing; every role may ask. */

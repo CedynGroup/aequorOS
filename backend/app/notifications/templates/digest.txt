@@ -16,7 +16,7 @@ DAILY SUMMARY · {{ period_label }}
 {% endfor %}
 {% endfor %}
 
-Open your notifications: {{ branding.url('/notifications') }}
+Open AequorOS (every notification is under the bell): {{ branding.url('/') }}
 
 --
 You received this summary because you chose daily summaries for some notifications.
